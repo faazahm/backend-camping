@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int       @id @default(autoincrement())
+  publicId         String    @unique @map("public_id") @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  email            String    @unique
+  username         String    @unique
+  passwordHash     String    @map("password_hash")
+  isVerified       Boolean   @default(false) @map("is_verified")
+  verificationCode String?   @map("verification_code")
+  resetPasswordToken String? @map("reset_password_token")
+  resetPasswordExpires DateTime? @map("reset_password_expires")
+  googleId         String?   @map("google_id")
+  fullName         String?   @map("full_name")
+  phoneNumber      String?   @map("phone_number")
+  address          String?   
+  profilePicture   String?   @map("profile_picture")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  role             UserRole  @default(USER)
+  bookings         Booking[]
+  reviews          Review[]
+
+  @@map("users")
+}
+
+model Camp {
+  id           Int       @id @default(autoincrement())
+  publicId     String    @unique @map("public_id") @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  name         String
+  description  String?
+  location     String?
+  nightlyPrice Int       @map("nightly_price")
+  dailyCapacity Int      @map("daily_capacity")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  bookings     Booking[]
+  reviews      Review[]
+
+  @@map("camps")
+}
+
+model Booking {
+  id         Int           @id @default(autoincrement())
+  publicId   String        @unique @map("public_id") @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  userId     Int           @map("user_id")
+  campId     Int           @map("camp_id")
+  startDate  DateTime      @map("start_date")
+  endDate    DateTime      @map("end_date")
+  peopleCount Int          @map("people_count")
+  totalPrice Int           @map("total_price")
+  status     BookingStatus @default(PENDING)
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+  camp Camp @relation(fields: [campId], references: [id])
+  bookingEquipments BookingEquipment[]
+
+  @@map("bookings")
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  campId    Int      @map("camp_id")
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+  camp Camp @relation(fields: [campId], references: [id])
+
+  @@map("reviews")
+}
+
+enum BookingStatus {
+  PENDING
+  PAID
+  CANCELLED
+  CHECK_IN
+  CHECKOUT
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model Equipment {
+  id          Int      @id @default(autoincrement())
+  publicId    String   @unique @map("public_id") @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  name        String
+  description String?
+  price       Int      // Price per day
+  stock       Int
+  photoUrl    String?  @map("photo_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  bookingEquipments BookingEquipment[]
+
+  @@map("equipments")
+}
+
+model BookingEquipment {
+  id          Int      @id @default(autoincrement())
+  bookingId   Int      @map("booking_id")
+  equipmentId Int      @map("equipment_id")
+  quantity    Int
+  nights      Int      @default(1)
+  price       Int      // Total price for this equipment in the booking
+
+  booking     Booking   @relation(fields: [bookingId], references: [id])
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+
+  @@map("booking_equipments")
+}
+
+model TokenBlacklist {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("token_blacklist")
+}
