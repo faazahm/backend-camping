@@ -2,7 +2,15 @@ const { Pool } = require("pg");
 
 let db = null;
 
-if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
+if (process.env.DATABASE_URL) {
+  db = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false, // Required for Neon/Render/Heroku
+    },
+    max: 10,
+  });
+} else if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
   db = new Pool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
@@ -11,6 +19,9 @@ if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
     port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 5432,
     max: 10,
   });
+}
+
+if (db) {
   (async () => {
     try {
       await db.query(`
