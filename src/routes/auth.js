@@ -316,6 +316,30 @@ authRouter.post("/google", async (req, res) => {
       return res.status(400).json({ message: "Google ID token wajib diisi" });
     }
 
+    // Verify token with clock skew tolerance (e.g., 5 minutes)
+    // Note: google-auth-library verifyIdToken doesn't directly support a simple 'clockTolerance' option in all versions easily exposed this way,
+    // but the error "Token used too late" specifically means the 'iat' (issued at) or 'exp' (expiration) time is too far off from the server time.
+    // This often happens if the server time (Railway) and the Google Auth server time are slightly out of sync, or if the token is old.
+    
+    // To fix "Token used too late", we can try to rely on the library's default behavior, but if it fails, we might need to catch it.
+    // However, the best way to handle "Token used too late" in this library is often ensuring the server time is correct (which we can't control on Railway)
+    // OR just retrying or asking the user to login again.
+    
+    // BUT, we can try to pass the 'maxExpiry' or check if we can relax the check. 
+    // Actually, a common workaround for slight time drifts is to just catch this specific error and allow it if it's very close, 
+    // but that's risky. 
+    
+    // Let's try to RE-FETCH the token from the frontend if possible, but here we only receive the token.
+    // The error says: "Token used too late, 1770043253.873 > 1770042227"
+    // Current time (approx): 1770043253 (which is likely the server time)
+    // Expiration time: 1770042227
+    // Difference: ~1000 seconds (about 17 minutes!)
+    
+    // Wait, 17 minutes is HUGE. This isn't a clock skew. This is an OLD TOKEN.
+    // The user is sending an EXPIRED token.
+    
+    // Solution: The Frontend is sending a stale/cached token. The user needs to logout/clear cache or the frontend needs to force a fresh token.
+    
     const ticket = await googleClient.verifyIdToken({
       idToken,
       audience: process.env.GOOGLE_CLIENT_ID,
