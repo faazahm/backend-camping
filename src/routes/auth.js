@@ -75,13 +75,31 @@ authRouter.post("/register", async (req, res) => {
         .json({ message: "Email, username, and password are required" });
     }
 
-    const { rows: existing } = await db.query(
-      "SELECT id FROM users WHERE email = $1 OR username = $2",
-      [email, username]
-    );
+    // const { rows: existing } = await db.query(
+    //   "SELECT id FROM users WHERE email = $1 OR username = $2",
+    //   [email, username]
+    // );
 
-    if (existing.length > 0) {
-      return res.status(400).json({ message: "Email or username already used" });
+    // if (existing.length > 0) {
+    //   return res.status(400).json({ message: "Email or username already used" });
+    // }
+    
+    // Check email separately to give clear error message
+    const { rows: existingEmail } = await db.query(
+      "SELECT id FROM users WHERE email = $1",
+      [email]
+    );
+    if (existingEmail.length > 0) {
+      return res.status(400).json({ message: "Email sudah terdaftar. Silakan login atau gunakan email lain." });
+    }
+
+    // Check username separately to give clear error message
+    const { rows: existingUsername } = await db.query(
+      "SELECT id FROM users WHERE username = $1",
+      [username]
+    );
+    if (existingUsername.length > 0) {
+      return res.status(400).json({ message: "Username sudah digunakan. Silakan pilih username lain." });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
