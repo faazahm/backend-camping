@@ -106,10 +106,10 @@ authRouter.post("/register", async (req, res) => {
       userId: result.rows[0].id,
     });
   } catch (err) {
-    console.error("Google Login Error:", err); // Log error lebih detail
+    console.error("Google Login Error:", err);
+    // Kirim pesan error detail ke frontend supaya muncul di layar user
     return res.status(500).json({ 
-      message: "Internal server error", 
-      error: err.message // Kirim pesan error asli ke frontend agar kelihatan di console
+      message: `Login Gagal: ${err.message}` 
     });
   }
 });
