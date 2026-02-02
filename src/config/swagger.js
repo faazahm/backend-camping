@@ -13,6 +13,10 @@ const options = {
     },
     servers: [
       {
+        url: 'https://backend-camping-production.up.railway.app',
+        description: 'Production server (Railway)',
+      },
+      {
         url: 'http://localhost:3000',
         description: 'Development server',
       },
