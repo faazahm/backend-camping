@@ -187,8 +187,10 @@ authRouter.post("/verify-email", async (req, res) => {
       token,
     });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("Google Login Error:", err);
+    return res.status(500).json({ 
+      message: `Login Gagal: ${err.message}` 
+    });
   }
 });
 
