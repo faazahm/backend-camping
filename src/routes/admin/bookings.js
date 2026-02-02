@@ -20,13 +20,31 @@ adminBookingsRouter.use(authenticate, requireAdmin);
  * @swagger
  * /admin/bookings:
  *   get:
- *     summary: Mendapatkan semua booking
+ *     summary: Mendapatkan semua booking (dengan fitur search & sort)
  *     tags: [AdminBookings]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Cari berdasarkan nama user, email, atau Booking ID
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [created_at, start_date, status, total_price]
+ *         description: Kolom untuk sorting (default created_at)
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [ASC, DESC]
+ *         description: Urutan sorting (default DESC)
  *     responses:
  *       200:
- *         description: Daftar semua booking
+ *         description: Daftar booking sesuai filter
  */
 adminBookingsRouter.get("/", async (req, res) => {
   try {
@@ -34,8 +52,15 @@ adminBookingsRouter.get("/", async (req, res) => {
       return res.status(500).json({ message: "Database is not configured" });
     }
 
-    const result = await db.query(
-      `SELECT
+    const { search, sortBy = 'created_at', order = 'DESC' } = req.query;
+
+    // Validasi kolom sorting untuk mencegah SQL Injection
+    const validSortColumns = ['created_at', 'start_date', 'status', 'total_price'];
+    const sortColumn = validSortColumns.includes(sortBy) ? `b.${sortBy}` : 'b.created_at';
+    const sortOrder = order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    let query = `
+      SELECT
         b.id,
         b.public_id,
         b.user_id,
@@ -48,12 +73,33 @@ adminBookingsRouter.get("/", async (req, res) => {
         b.created_at,
         u.username,
         u.email,
+        u.full_name,
         c.name as camp_name
       FROM "bookings" b
       LEFT JOIN "users" u ON b.user_id = u.id
       LEFT JOIN "camps" c ON b.camp_id = c.id
-      ORDER BY b.created_at DESC`
-    );
+    `;
+
+    const params = [];
+    const whereClauses = [];
+
+    if (search) {
+      whereClauses.push(`(
+        u.username ILIKE $${params.length + 1} OR 
+        u.email ILIKE $${params.length + 1} OR 
+        u.full_name ILIKE $${params.length + 1} OR
+        b.public_id::text ILIKE $${params.length + 1}
+      )`);
+      params.push(`%${search}%`);
+    }
+
+    if (whereClauses.length > 0) {
+      query += ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    query += ` ORDER BY ${sortColumn} ${sortOrder}`;
+
+    const result = await db.query(query, params);
 
     return res.json(result.rows);
   } catch (err) {
