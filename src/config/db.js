@@ -182,7 +182,8 @@ if (db) {
              SELECT 1 FROM information_schema.columns
              WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'google_id'
            ) THEN
-             ALTER TABLE "users" ADD COLUMN "google_id" VARCHAR(255) UNIQUE;
+             ALTER TABLE "users" ADD COLUMN "google_id" VARCHAR(255);
+             ALTER TABLE "users" ADD CONSTRAINT "users_google_id_key" UNIQUE ("google_id");
            END IF;
          END $$;`
       );
