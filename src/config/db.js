@@ -3,9 +3,12 @@ const { Pool } = require("pg");
 let db = null;
 
 if (process.env.DATABASE_URL) {
+  // Detect if connecting to local database
+  const isLocal = process.env.DATABASE_URL.includes("localhost") || process.env.DATABASE_URL.includes("127.0.0.1");
+  
   db = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: {
+    ssl: isLocal ? false : {
       rejectUnauthorized: false, // Required for Neon/Render/Heroku
     },
     max: 10,
@@ -173,6 +176,13 @@ if (db) {
              WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'profile_picture'
            ) THEN
              ALTER TABLE "users" ADD COLUMN "profile_picture" TEXT;
+           END IF;
+
+           IF NOT EXISTS (
+             SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'google_id'
+           ) THEN
+             ALTER TABLE "users" ADD COLUMN "google_id" VARCHAR(255) UNIQUE;
            END IF;
          END $$;`
       );
