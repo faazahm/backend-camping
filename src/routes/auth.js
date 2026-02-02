@@ -61,11 +61,11 @@ authRouter.post("/register", async (req, res) => {
         .json({ message: "Database is not configured on the server" });
     }
 
-    if (!mailTransporter) {
-      return res
-        .status(500)
-        .json({ message: "Email is not configured on the server" });
-    }
+    // if (!mailTransporter) {
+    //   return res
+    //     .status(500)
+    //     .json({ message: "Email is not configured on the server" });
+    // }
 
     const { email, username, password } = req.body;
 
@@ -92,21 +92,24 @@ authRouter.post("/register", async (req, res) => {
       [email, username, passwordHash, false, verificationCode]
     );
 
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-      to: email,
-      subject: "Kode verifikasi akun",
-      text: `Kode verifikasi kamu adalah: ${verificationCode}`,
-    };
-
-    await mailTransporter.sendMail(mailOptions);
+    if (mailTransporter) {
+      const mailOptions = {
+        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+        to: email,
+        subject: "Kode verifikasi akun",
+        text: `Kode verifikasi kamu adalah: ${verificationCode}`,
+      };
+      await mailTransporter.sendMail(mailOptions);
+    } else {
+      console.log(`[DEV MODE] Email not configured. Verification code for ${email}: ${verificationCode}`);
+    }
 
     return res.status(201).json({
-      message: "Signup berhasil, cek email untuk kode verifikasi",
+      message: mailTransporter ? "Signup berhasil, cek email untuk kode verifikasi" : "Signup berhasil (Dev Mode), cek server logs untuk kode verifikasi",
       userId: result.rows[0].id,
     });
   } catch (err) {
-    console.error("Google Login Error:", err);
+    console.error("Register Error:", err);
     // Kirim pesan error detail ke frontend supaya muncul di layar user
     return res.status(500).json({ 
       message: `Login Gagal: ${err.message}` 
