@@ -492,6 +492,56 @@ authRouter.post("/forgot-password", async (req, res) => {
 
 /**
  * @swagger
+ * /auth/verify-reset-token:
+ *   post:
+ *     summary: Cek apakah token reset password valid
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *             properties:
+ *               token:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Token valid
+ *       400:
+ *         description: Token tidak valid atau kadaluarsa
+ */
+authRouter.post("/verify-reset-token", async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ message: "Database is not configured" });
+    }
+
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ message: "Token wajib diisi" });
+    }
+
+    const { rows } = await db.query(
+      "SELECT id FROM users WHERE reset_password_token = $1 AND reset_password_expires > NOW()",
+      [token]
+    );
+
+    if (rows.length === 0) {
+      return res.status(400).json({ message: "Token tidak valid atau sudah kadaluarsa" });
+    }
+
+    return res.json({ message: "Token valid" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+/**
+ * @swagger
  * /auth/reset-password:
  *   post:
  *     summary: Reset password dengan token
