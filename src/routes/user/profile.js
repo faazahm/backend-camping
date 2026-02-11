@@ -63,6 +63,7 @@ const upload = multer({
  */
 // GET Profile (Ambil data profile user)
 profileRouter.get("/", authenticate, async (req, res) => {
+  console.log(`[Profile] GET request received for user: ${req.user.id}`);
   try {
     if (!db) {
       return res.status(500).json({ message: "Database is not configured" });
@@ -124,6 +125,7 @@ profileRouter.get("/", authenticate, async (req, res) => {
  */
 // PUT & POST Profile (Update data profile + upload foto)
 const updateProfileHandler = async (req, res) => {
+  console.log(`[Profile] ${req.method} request received to update profile for user: ${req.user.id}`);
   try {
     if (!db) {
       return res.status(500).json({ message: "Database is not configured" });
@@ -191,9 +193,16 @@ const uploadMiddleware = (req, res, next) => {
   });
 };
 
-profileRouter.put("/", authenticate, uploadMiddleware, updateProfileHandler);
-profileRouter.post("/", authenticate, uploadMiddleware, updateProfileHandler);
-profileRouter.patch("/", authenticate, uploadMiddleware, updateProfileHandler);
+// Menangani /profile dan /profile/
+profileRouter.route("/")
+  .put(authenticate, uploadMiddleware, updateProfileHandler)
+  .post(authenticate, uploadMiddleware, updateProfileHandler)
+  .patch(authenticate, uploadMiddleware, updateProfileHandler);
+
+// Tambahkan alias /update jika frontend memanggilnya
+profileRouter.post("/update", authenticate, uploadMiddleware, updateProfileHandler);
+profileRouter.put("/update", authenticate, uploadMiddleware, updateProfileHandler);
+
 
 
 module.exports = { profileRouter };
