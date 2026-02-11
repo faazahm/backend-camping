@@ -39,6 +39,11 @@ dashboardRouter.get("/history", authenticate, async (req, res) => {
     const { status } = req.query;
     const userId = req.user.id;
 
+    // Tambahkan header agar browser tidak menyimpan cache data sensitif (mencegah data bocor saat logout/login akun lain)
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     let query = `
       SELECT 
         b.public_id,

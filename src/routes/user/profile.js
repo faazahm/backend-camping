@@ -122,20 +122,8 @@ profileRouter.get("/", authenticate, async (req, res) => {
  *       400:
  *         description: File terlalu besar atau format salah
  */
-// PUT Profile (Update data profile + upload foto)
-profileRouter.put("/", authenticate, (req, res, next) => {
-  upload.single("profile_picture")(req, res, function (err) {
-    if (err instanceof multer.MulterError) {
-      if (err.code === "LIMIT_FILE_SIZE") {
-        return res.status(400).json({ message: "Ukuran file terlalu besar (Maks 5MB)" });
-      }
-      return res.status(400).json({ message: err.message });
-    } else if (err) {
-      return res.status(400).json({ message: err.message });
-    }
-    next();
-  });
-}, async (req, res) => {
+// PUT & POST Profile (Update data profile + upload foto)
+const updateProfileHandler = async (req, res) => {
   try {
     if (!db) {
       return res.status(500).json({ message: "Database is not configured" });
@@ -146,11 +134,11 @@ profileRouter.put("/", authenticate, (req, res, next) => {
     
     // Ambil data user lama untuk cek foto lama jika ada update foto baru
     const currentUser = await db.query("SELECT profile_picture FROM users WHERE id = $1", [userId]);
-    let profilePicturePath = currentUser.rows[0].profile_picture;
+    let profilePicturePath = currentUser.rows[0]?.profile_picture;
 
     // Jika ada file baru yang diupload
     if (req.file) {
-      // Hapus foto lama jika ada dan bukan default (opsional, untuk hemat storage)
+      // Hapus foto lama jika ada
       if (profilePicturePath && fs.existsSync(profilePicturePath)) {
         try {
           fs.unlinkSync(profilePicturePath);
@@ -174,7 +162,7 @@ profileRouter.put("/", authenticate, (req, res, next) => {
 
     const updatedUser = result.rows[0];
     
-    if (updatedUser.profile_picture) {
+    if (updatedUser && updatedUser.profile_picture) {
       updatedUser.profile_picture_url = `${req.protocol}://${req.get("host")}/${updatedUser.profile_picture}`;
     }
 
@@ -187,6 +175,25 @@ profileRouter.put("/", authenticate, (req, res, next) => {
     console.error("Update Profile Error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
-});
+};
+
+const uploadMiddleware = (req, res, next) => {
+  upload.single("profile_picture")(req, res, function (err) {
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ message: "Ukuran file terlalu besar (Maks 5MB)" });
+      }
+      return res.status(400).json({ message: err.message });
+    } else if (err) {
+      return res.status(400).json({ message: err.message });
+    }
+    next();
+  });
+};
+
+profileRouter.put("/", authenticate, uploadMiddleware, updateProfileHandler);
+profileRouter.post("/", authenticate, uploadMiddleware, updateProfileHandler);
+profileRouter.patch("/", authenticate, uploadMiddleware, updateProfileHandler);
+
 
 module.exports = { profileRouter };

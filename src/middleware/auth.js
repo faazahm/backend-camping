@@ -12,18 +12,23 @@ async function authenticate(req, res, next) {
   const token = parts[1];
 
   try {
-    // 1. Verify Signature & Expiry first (CPU bound, fast)
-    // This prevents DB spam with invalid/expired tokens
+    if (!process.env.JWT_SECRET) {
+      console.error("[Auth] JWT_SECRET tidak terkonfigurasi di .env");
+      return res.status(500).json({ message: "Server configuration error" });
+    }
+
+    // 1. Verify Signature & Expiry first
     const payload = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 2. Check Blacklist (I/O bound)
+    // 2. Check Blacklist
     if (db) {
-      const blacklistCheck = await db.query(
+      const { rows } = await db.query(
         "SELECT id FROM token_blacklist WHERE token = $1",
         [token]
       );
-      if (blacklistCheck.rows.length > 0) {
-        return res.status(401).json({ message: "Token has been invalidated (logged out)" });
+      if (rows.length > 0) {
+        console.warn(`[Auth] Token ditolak: Sudah logout (Blacklisted)`);
+        return res.status(401).json({ message: "Sesi telah berakhir, silakan login kembali" });
       }
     }
 
@@ -33,14 +38,14 @@ async function authenticate(req, res, next) {
       username: payload.username,
       role: payload.role || "USER",
     };
-    req.token = token; // Attach token for logout use
+    req.token = token;
     return next();
   } catch (err) {
-    if (err.message === "Token has been invalidated (logged out)") {
-        return res.status(401).json({ message: err.message });
-    }
-    console.error("Auth Error:", err.message);
-    return res.status(401).json({ message: "Invalid token" });
+    console.error(`[Auth] Gagal verifikasi token: ${err.message}`);
+    const message = err.name === "TokenExpiredError" 
+      ? "Sesi Anda telah berakhir (Expired)" 
+      : "Token tidak valid";
+    return res.status(401).json({ message });
   }
 }
 
