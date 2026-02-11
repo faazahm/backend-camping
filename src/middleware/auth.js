@@ -22,13 +22,18 @@ async function authenticate(req, res, next) {
 
     // 2. Check Blacklist
     if (db) {
-      const { rows } = await db.query(
-        "SELECT id FROM token_blacklist WHERE token = $1",
-        [token]
-      );
-      if (rows.length > 0) {
-        console.warn(`[Auth] Token ditolak: Sudah logout (Blacklisted)`);
-        return res.status(401).json({ message: "Sesi telah berakhir, silakan login kembali" });
+      try {
+        const { rows } = await db.query(
+          "SELECT id FROM token_blacklist WHERE token = $1",
+          [token]
+        );
+        if (rows.length > 0) {
+          console.warn(`[Auth] Token ditolak: Sudah logout (Blacklisted)`);
+          return res.status(401).json({ message: "Sesi telah berakhir, silakan login kembali" });
+        }
+      } catch (dbErr) {
+        // Jika tabel blacklist bermasalah, log saja tapi jangan blokir user selama JWT valid
+        console.error(`[Auth] Warning: Gagal cek blacklist database: ${dbErr.message}`);
       }
     }
 
@@ -42,10 +47,17 @@ async function authenticate(req, res, next) {
     return next();
   } catch (err) {
     console.error(`[Auth] Gagal verifikasi token: ${err.message}`);
-    const message = err.name === "TokenExpiredError" 
-      ? "Sesi Anda telah berakhir (Expired)" 
-      : "Token tidak valid";
-    return res.status(401).json({ message });
+    
+    // Bedakan error JWT asli dengan error sistem
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Sesi Anda telah berakhir (Expired)" });
+    }
+    
+    if (err.name === "JsonWebTokenError") {
+      return res.status(401).json({ message: "Token tidak valid atau sudah rusak" });
+    }
+
+    return res.status(500).json({ message: "Internal server error saat verifikasi sesi" });
   }
 }
 
