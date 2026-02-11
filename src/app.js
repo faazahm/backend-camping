@@ -32,17 +32,37 @@ function createApp() {
   // Swagger UI
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
-  app.use("/auth", authRouter);
-  app.use("/booking", bookingRouter);
-  app.use("/dashboard", dashboardRouter);
-  app.use("/admin/dashboard", adminDashboardRouter);
-  app.use("/admin/notifications", notificationRouter);
-  app.use("/admin/reports", reportsRouter);
-  app.use("/admin/reviews", adminReviewsRouter);
-  app.use("/admin/questions", adminQuestionsRouter);
-  app.use("/admin", adminRouter);
-  app.use("/profile", profileRouter);
-  app.use("/reviews", reviewsRouter);
+  // Define all routers in a function or a shared object to easily mount them with/without prefix
+  const mountRoutes = (router) => {
+    router.use("/auth", authRouter);
+    router.use("/booking", bookingRouter);
+    router.use("/dashboard", dashboardRouter);
+    router.use("/admin/dashboard", adminDashboardRouter);
+    router.use("/admin/notifications", notificationRouter);
+    router.use("/admin/reports", reportsRouter);
+    router.use("/admin/reviews", adminReviewsRouter);
+    router.use("/admin/questions", adminQuestionsRouter);
+    router.use("/admin", adminRouter);
+    router.use("/profile", profileRouter);
+    router.use("/reviews", reviewsRouter);
+  };
+
+  // Mount with /api prefix
+  const apiRouter = express.Router();
+  mountRoutes(apiRouter);
+  app.use("/api", apiRouter);
+
+  // Also mount at root for backward compatibility
+  mountRoutes(app);
+
+  // 404 Handler with Logging (To debug 404 issues)
+  app.use((req, res, next) => {
+    console.warn(`[404] ${req.method} ${req.originalUrl} - Not Found`);
+    res.status(404).json({ 
+      message: `Endpoint ${req.method} ${req.originalUrl} tidak ditemukan.`,
+      available_routes: ["/profile", "/api/profile", "/auth", "/api/auth"]
+    });
+  });
 
   app.use((err, req, res, next) => {
     if (
