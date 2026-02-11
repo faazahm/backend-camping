@@ -128,10 +128,79 @@ authRouter.post("/register", async (req, res) => {
     });
   } catch (err) {
     console.error("Register Error:", err);
-    // Kirim pesan error detail ke frontend supaya muncul di layar user
     return res.status(500).json({ 
-      message: `Login Gagal: ${err.message}` 
+      message: `Registrasi Gagal: ${err.message}` 
     });
+  }
+});
+
+/**
+ * @swagger
+ * /auth/resend-verification:
+ *   post:
+ *     summary: Kirim ulang kode verifikasi
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Kode verifikasi dikirim ulang
+ *       400:
+ *         description: Email tidak ditemukan atau sudah terverifikasi
+ */
+authRouter.post("/resend-verification", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email wajib diisi" });
+    }
+
+    const { rows } = await db.query(
+      "SELECT id, is_verified FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (rows.length === 0) {
+      return res.status(400).json({ message: "User tidak ditemukan" });
+    }
+
+    if (rows[0].is_verified) {
+      return res.status(400).json({ message: "Email sudah terverifikasi" });
+    }
+
+    const verificationCode = generateVerificationCode();
+    await db.query(
+      "UPDATE users SET verification_code = $1 WHERE id = $2",
+      [verificationCode, rows[0].id]
+    );
+
+    if (mailTransporter) {
+      const mailOptions = {
+        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+        to: email,
+        subject: "Kode verifikasi akun (Kirim Ulang)",
+        text: `Kode verifikasi baru kamu adalah: ${verificationCode}`,
+      };
+      await mailTransporter.sendMail(mailOptions);
+    } else {
+      console.log(`[DEV MODE] Resend: Verification code for ${email}: ${verificationCode}`);
+    }
+
+    return res.json({
+      message: mailTransporter ? "Kode verifikasi telah dikirim ulang" : "Kode verifikasi telah diupdate (Dev Mode), cek server logs",
+    });
+  } catch (err) {
+    console.error("Resend Error:", err);
+    return res.status(500).json({ message: `Gagal mengirim ulang kode: ${err.message}` });
   }
 });
 
@@ -208,9 +277,9 @@ authRouter.post("/verify-email", async (req, res) => {
       token,
     });
   } catch (err) {
-    console.error("Google Login Error:", err);
+    console.error("Verification Error:", err);
     return res.status(500).json({ 
-      message: `Login Gagal: ${err.message}` 
+      message: `Verifikasi Gagal: ${err.message}` 
     });
   }
 });
