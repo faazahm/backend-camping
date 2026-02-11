@@ -19,6 +19,9 @@ const swaggerSpecs = require('./config/swagger');
 function createApp() {
   const app = express();
 
+  // Aktifkan trust proxy agar express-rate-limit bisa membaca IP asli user di Railway/Cloud
+  app.set('trust proxy', 1);
+
   app.use(cors());
   app.use(express.json());
   app.use(helmet());
