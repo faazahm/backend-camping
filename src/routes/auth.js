@@ -132,7 +132,9 @@ authRouter.post("/register", async (req, res) => {
     return res.status(201).json({
       message: mailTransporter ? "Signup berhasil, silakan cek email Anda untuk kode verifikasi" : "Signup berhasil (Dev Mode), cek server logs untuk kode verifikasi",
       userId: result.rows[0].id,
-      devCode: mailTransporter ? null : verificationCode // Hanya kirim kode jika dev mode
+      // HAPUS BAGIAN INI JIKA SUDAH PRODUCTION
+      // Ini membantu Anda melihat kode langsung di respon jika email timeout
+      verificationCode: verificationCode 
     });
   } catch (err) {
     console.error("Register Error:", err);
