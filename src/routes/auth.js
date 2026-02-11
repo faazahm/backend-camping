@@ -558,11 +558,16 @@ authRouter.post("/forgot-password", async (req, res) => {
       text: `Gunakan token berikut untuk reset password Anda: ${token}\n\nToken ini berlaku selama 1 jam.`,
     };
 
-    await mailTransporter.sendMail(mailOptions);
+    console.log(`[Forgot Password] Attempting to send email to: ${email}...`);
+    
+    // Background sending
+    mailTransporter.sendMail(mailOptions)
+      .then(() => console.log(`[Forgot Password] Email sent to: ${email}`))
+      .catch(err => console.error(`[Forgot Password] Email failed: ${err.message}`));
 
-    return res.json({ message: "Email reset password telah dikirim" });
+    return res.json({ message: "Jika email terdaftar, instruksi reset password akan segera dikirim." });
   } catch (err) {
-    console.error(err);
+    console.error("Forgot Password Error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
