@@ -2,7 +2,7 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const rateLimit = require("express-rate-limit");
 const { db } = require("../config/db");
-const { mailTransporter } = require("../config/email");
+const { mailTransporter, sendEmail } = require("../config/email");
 const { googleClient } = require("../config/google");
 const { generateVerificationCode, generateToken, generateResetToken } = require("../utils/auth");
 const { authenticate } = require("../middleware/auth");
@@ -120,20 +120,16 @@ authRouter.post("/register", async (req, res) => {
       
       console.log(`[Register] Attempting to send email to: ${email}...`);
       
-      // JALANKAN DI BACKGROUND: Kita tidak menunggu (await) email selesai terkirim
-      // agar user bisa langsung mendapatkan respon sukses registrasi.
-      mailTransporter.sendMail(mailOptions)
+      // JALANKAN DI BACKGROUND
+      sendEmail(mailOptions)
         .then(() => console.log(`[Register] Background Email sent to: ${email}`))
         .catch(err => console.error(`[Register] Background Email failed: ${err.message}`));
-    } else {
-      console.log(`[DEV MODE] Email not configured. Verification code for ${email}: ${verificationCode}`);
     }
 
     return res.status(201).json({
-      message: mailTransporter ? "Signup berhasil, silakan cek email Anda untuk kode verifikasi" : "Signup berhasil (Dev Mode), cek server logs untuk kode verifikasi",
+      message: "Signup berhasil, silakan cek email Anda untuk kode verifikasi",
       userId: result.rows[0].id,
       // HAPUS BAGIAN INI JIKA SUDAH PRODUCTION
-      // Ini membantu Anda melihat kode langsung di respon jika email timeout
       verificationCode: verificationCode 
     });
   } catch (err) {
@@ -193,20 +189,20 @@ authRouter.post("/resend-verification", async (req, res) => {
       [verificationCode, rows[0].id]
     );
 
-    if (mailTransporter) {
-      const mailOptions = {
-        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-        to: email,
-        subject: "Kode verifikasi akun (Kirim Ulang)",
-        text: `Kode verifikasi baru kamu adalah: ${verificationCode}`,
-      };
-      await mailTransporter.sendMail(mailOptions);
-    } else {
-      console.log(`[DEV MODE] Resend: Verification code for ${email}: ${verificationCode}`);
-    }
+    const mailOptions = {
+      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      to: email,
+      subject: "Kode verifikasi akun (Kirim Ulang)",
+      text: `Kode verifikasi baru kamu adalah: ${verificationCode}`,
+    };
+    
+    // Background sending
+    sendEmail(mailOptions)
+      .then(() => console.log(`[Resend] Email sent to: ${email}`))
+      .catch(err => console.error(`[Resend] Email failed: ${err.message}`));
 
     return res.json({
-      message: mailTransporter ? "Kode verifikasi telah dikirim ulang" : "Kode verifikasi telah diupdate (Dev Mode), cek server logs",
+      message: "Kode verifikasi telah dikirim ulang ke email Anda",
     });
   } catch (err) {
     console.error("Resend Error:", err);
@@ -563,7 +559,7 @@ authRouter.post("/forgot-password", async (req, res) => {
     console.log(`[Forgot Password] Attempting to send email to: ${email}...`);
     
     // Background sending
-    mailTransporter.sendMail(mailOptions)
+    sendEmail(mailOptions)
       .then(() => console.log(`[Forgot Password] Email sent to: ${email}`))
       .catch(err => console.error(`[Forgot Password] Email failed: ${err.message}`));
 
