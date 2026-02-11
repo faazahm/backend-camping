@@ -30,14 +30,14 @@ const sendEmail = async (options) => {
   const { to, subject, text, html } = options;
   const from = process.env.EMAIL_FROM || "onboarding@resend.dev"; // Default Resend test email
 
-  // 1. Try Resend API if API Key is available
+  // 1. Try Resend API
   if (process.env.RESEND_API_KEY) {
     console.log("[Email] Attempting via Resend API...");
     try {
       const response = await axios.post(
         "https://api.resend.com/emails",
         { 
-          from: "onboarding@resend.dev", // Pakai ini untuk testing akun baru
+          from: "onboarding@resend.dev",
           to, 
           subject, 
           text, 
@@ -48,14 +48,34 @@ const sendEmail = async (options) => {
       console.log("[Email] SUCCESS via Resend API:", response.data.id);
       return { success: true, id: response.data.id };
     } catch (err) {
-      console.error("[Email] Resend API ERROR:", err.response?.data || err.message);
-      // Fallback to SMTP
+      console.error("[Email] Resend API ERROR:", err.response?.data?.message || err.message);
+      // If Resend fails due to restricted recipient, continue to next method
     }
-  } else {
-    console.warn("[Email] RESEND_API_KEY not found in environment variables.");
   }
 
-  // 2. Try SMTP if initialized
+  // 2. Try Brevo API (HTTP) - JAUH LEBIH STABIL DARI SMTP
+  if (process.env.BREVO_API_KEY) {
+    console.log("[Email] Attempting via Brevo API...");
+    try {
+      const response = await axios.post(
+        "https://api.brevo.com/v3/smtp/email",
+        {
+          sender: { email: process.env.EMAIL_USER, name: "Camping Verification" },
+          to: [{ email: to }],
+          subject,
+          textContent: text,
+          htmlContent: html || text
+        },
+        { headers: { "api-key": process.env.BREVO_API_KEY.trim() } }
+      );
+      console.log("[Email] SUCCESS via Brevo API:", response.data.messageId);
+      return { success: true, id: response.data.messageId };
+    } catch (err) {
+      console.error("[Email] Brevo API ERROR:", err.response?.data || err.message);
+    }
+  }
+
+  // 3. Try SMTP (Fallback terakhir)
   if (mailTransporter) {
     console.log(`[Email] Attempting via SMTP (${process.env.EMAIL_HOST || 'default'})...`);
     try {
