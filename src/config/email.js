@@ -17,9 +17,15 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     config.secure = process.env.EMAIL_SECURE === "true"; // true for 465, false for other ports
     
     // Add connection timeout settings
-    config.connectionTimeout = 10000; // 10s
-    config.greetingTimeout = 10000;   // 10s
-    config.socketTimeout = 10000;     // 10s
+    config.connectionTimeout = 5000; // 5s (Faster fail)
+    config.greetingTimeout = 5000;   // 5s
+    config.socketTimeout = 5000;     // 5s
+    
+    // Add extra stability for Gmail/Cloud
+    config.pool = true;
+    config.tls = {
+      rejectUnauthorized: false // Bypass certificate issues on some cloud IPs
+    };
   } else if (process.env.EMAIL_SERVICE) {
     // Configuration for services like 'gmail'
     config.service = process.env.EMAIL_SERVICE;

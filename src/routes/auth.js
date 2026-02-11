@@ -117,14 +117,22 @@ authRouter.post("/register", async (req, res) => {
         subject: "Kode verifikasi akun",
         text: `Kode verifikasi kamu adalah: ${verificationCode}`,
       };
-      await mailTransporter.sendMail(mailOptions);
+      
+      console.log(`[Register] Attempting to send email to: ${email}...`);
+      
+      // JALANKAN DI BACKGROUND: Kita tidak menunggu (await) email selesai terkirim
+      // agar user bisa langsung mendapatkan respon sukses registrasi.
+      mailTransporter.sendMail(mailOptions)
+        .then(() => console.log(`[Register] Background Email sent to: ${email}`))
+        .catch(err => console.error(`[Register] Background Email failed: ${err.message}`));
     } else {
       console.log(`[DEV MODE] Email not configured. Verification code for ${email}: ${verificationCode}`);
     }
 
     return res.status(201).json({
-      message: mailTransporter ? "Signup berhasil, cek email untuk kode verifikasi" : "Signup berhasil (Dev Mode), cek server logs untuk kode verifikasi",
+      message: mailTransporter ? "Signup berhasil, silakan cek email Anda untuk kode verifikasi" : "Signup berhasil (Dev Mode), cek server logs untuk kode verifikasi",
       userId: result.rows[0].id,
+      devCode: mailTransporter ? null : verificationCode // Hanya kirim kode jika dev mode
     });
   } catch (err) {
     console.error("Register Error:", err);
