@@ -281,6 +281,7 @@ authRouter.post("/verify-email", async (req, res) => {
     return res.json({
       message: "Email berhasil diverifikasi",
       token,
+      role: user.role,
     });
   } catch (err) {
     console.error("Verification Error:", err);
@@ -489,6 +490,7 @@ authRouter.post("/google", async (req, res) => {
     return res.json({
       message: "Login Google berhasil",
       token,
+      role: user.role,
     });
   } catch (err) {
     console.error("Google Login Error:", err);
