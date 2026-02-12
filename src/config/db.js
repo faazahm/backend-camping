@@ -27,6 +27,18 @@ if (process.env.DATABASE_URL) {
 if (db) {
   (async () => {
     try {
+      // 1. PRIORITAS UTAMA: Buat tabel token_blacklist agar auth tidak error
+      console.log("[DB] Mencoba membuat tabel token_blacklist...");
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS "token_blacklist" (
+          "id" SERIAL PRIMARY KEY,
+          "token" TEXT UNIQUE NOT NULL,
+          "expires_at" TIMESTAMP NOT NULL,
+          "created_at" TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      console.log("[DB] Tabel token_blacklist siap.");
+
       await db.query(`
         DO $$
         BEGIN
