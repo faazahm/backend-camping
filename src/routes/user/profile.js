@@ -125,7 +125,10 @@ profileRouter.get("/", authenticate, async (req, res) => {
  */
 // PUT & POST Profile (Update data profile + upload foto)
 const updateProfileHandler = async (req, res) => {
-  console.log(`[Profile] ${req.method} request received to update profile for user: ${req.user.id}`);
+  console.log(`[Profile] ${req.method} request received`);
+  console.log("[Profile] Body:", req.body);
+  console.log("[Profile] File:", req.file ? req.file.filename : "No file uploaded");
+
   try {
     if (!db) {
       return res.status(500).json({ message: "Database is not configured" });
@@ -134,13 +137,13 @@ const updateProfileHandler = async (req, res) => {
     const userId = req.user.id;
     const { full_name, phone_number, address } = req.body;
     
-    // Ambil data user lama untuk cek foto lama jika ada update foto baru
+    // Ambil data user lama
     const currentUser = await db.query("SELECT profile_picture FROM users WHERE id = $1", [userId]);
     let profilePicturePath = currentUser.rows[0]?.profile_picture;
 
     // Jika ada file baru yang diupload
     if (req.file) {
-      // Hapus foto lama jika ada
+      // Hapus foto lama jika ada dan bukan default
       if (profilePicturePath && fs.existsSync(profilePicturePath)) {
         try {
           fs.unlinkSync(profilePicturePath);
@@ -148,18 +151,27 @@ const updateProfileHandler = async (req, res) => {
           console.error("Gagal menghapus foto lama:", e);
         }
       }
-      profilePicturePath = req.file.path.replace(/\\/g, "/"); // Normalisasi path
+      // Simpan path baru dengan normalisasi slash
+      profilePicturePath = req.file.path.replace(/\\/g, "/");
     }
 
+    // Gunakan COALESCE agar jika field tidak dikirim, data lama tetap terjaga
+    // Namun khusus untuk profilePicturePath, kita masukkan nilai yang sudah kita proses di atas
     const result = await db.query(
       `UPDATE users 
        SET full_name = COALESCE($1, full_name),
            phone_number = COALESCE($2, phone_number),
            address = COALESCE($3, address),
-           profile_picture = COALESCE($4, profile_picture)
+           profile_picture = $4
        WHERE id = $5
        RETURNING id, email, username, full_name, phone_number, address, profile_picture, role`,
-      [full_name, phone_number, address, profilePicturePath, userId]
+      [
+        full_name || null, 
+        phone_number || null, 
+        address || null, 
+        profilePicturePath || null, 
+        userId
+      ]
     );
 
     const updatedUser = result.rows[0];
