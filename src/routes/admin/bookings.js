@@ -134,7 +134,7 @@ adminBookingsRouter.get("/", async (req, res) => {
  *             properties:
  *               status:
  *                 type: string
- *                 enum: [PENDING, PAID, CANCELLED, CHECK_IN, CHECKOUT]
+ *                 enum: [PENDING, PAID, CHECK_IN, CHECK_OUT, CANCELLED]
  *     responses:
  *       200:
  *         description: Status berhasil diupdate
@@ -154,7 +154,7 @@ adminBookingsRouter.put("/:id/status", async (req, res) => {
     if (!publicId || !status) return res.status(400).json({ message: "ID dan status wajib diisi" });
     if (!UUID_REGEX.test(publicId)) return res.status(400).json({ message: "Invalid UUID" });
 
-    const allowed = ["PENDING", "PAID", "CANCELLED", "CHECK_IN", "CHECKOUT"];
+    const allowed = ["PENDING", "PAID", "CHECK_IN", "CHECK_OUT", "CANCELLED"];
     if (!allowed.includes(status)) return res.status(400).json({ message: "Status tidak valid" });
 
     client = await db.connect();

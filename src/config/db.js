@@ -124,6 +124,7 @@ if (db) {
       );
       await db.query(`ALTER TYPE "BookingStatus" ADD VALUE IF NOT EXISTS 'PAID'`);
       await db.query(`ALTER TYPE "BookingStatus" ADD VALUE IF NOT EXISTS 'CHECK_IN'`);
+      await db.query(`ALTER TYPE "BookingStatus" ADD VALUE IF NOT EXISTS 'CHECK_OUT'`);
 
       // Create notifications table
       await db.query(`
@@ -137,6 +138,7 @@ if (db) {
         );
       `);
 
+      // Hapus baris CHECKOUT lama yang tidak konsisten jika perlu (Opsional, tapi sebaiknya biarkan saja agar tidak error)
       await db.query(`ALTER TYPE "BookingStatus" ADD VALUE IF NOT EXISTS 'CHECKOUT'`);
 
       await db.query(
