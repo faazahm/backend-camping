@@ -233,6 +233,10 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
     const id = check.rows[0].id;
     let photoUrl = check.rows[0].photo_url;
 
+    // Konversi ke Integer bulat untuk menghindari pembulatan aneh
+    const capacityInt = dailyCapacity !== undefined ? parseInt(dailyCapacity, 10) : undefined;
+    const priceInt = nightlyPrice !== undefined ? parseInt(nightlyPrice, 10) : undefined;
+
     // Jika ada upload gambar baru
     if (req.file) {
       // Hapus gambar lama jika ada
@@ -258,8 +262,8 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
         name || null, 
         description || null, 
         location || null, 
-        dailyCapacity || null, 
-        nightlyPrice || null, 
+        capacityInt || null, 
+        priceInt || null, 
         isActive !== undefined ? isActive : null, 
         photoUrl, 
         id
