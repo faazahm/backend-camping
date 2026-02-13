@@ -120,14 +120,18 @@ adminEquipmentsRouter.post("/", upload.single("image"), async (req, res) => {
     const { name, description, price, stock } = req.body;
     const photoUrl = req.file ? req.file.path.replace(/\\/g, "/") : null;
 
-    if (!name || price === undefined || stock === undefined) {
+    // Konversi ke Integer murni untuk menghindari pembulatan atau manipulasi otomatis
+    const priceInt = parseInt(price, 10);
+    const stockInt = parseInt(stock, 10);
+
+    if (!name || isNaN(priceInt) || isNaN(stockInt)) {
       if (photoUrl && fs.existsSync(photoUrl)) fs.unlinkSync(photoUrl);
-      return res.status(400).json({ message: "Nama, harga, dan stok wajib diisi" });
+      return res.status(400).json({ message: "Nama, harga, dan stok wajib diisi dengan angka valid" });
     }
 
     const result = await db.query(
       'INSERT INTO "equipments" (name, description, price, stock, photo_url, updated_at) VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *',
-      [name, description, price, stock, photoUrl]
+      [name, description, priceInt, stockInt, photoUrl]
     );
     
     const row = result.rows[0];
@@ -198,6 +202,10 @@ adminEquipmentsRouter.put("/:id", upload.single("image"), async (req, res) => {
     const id = check.rows[0].id;
     let photoUrl = check.rows[0].photo_url;
 
+    // Konversi ke Integer murni untuk menghindari pembulatan atau manipulasi otomatis
+    const priceInt = price !== undefined ? parseInt(price, 10) : undefined;
+    const stockInt = stock !== undefined ? parseInt(stock, 10) : undefined;
+
     if (req.file) {
       if (photoUrl && fs.existsSync(photoUrl)) {
         try { fs.unlinkSync(photoUrl); } catch (e) {}
@@ -217,8 +225,8 @@ adminEquipmentsRouter.put("/:id", upload.single("image"), async (req, res) => {
       [
         name || null, 
         description || null, 
-        price || null, 
-        stock || null, 
+        priceInt !== undefined ? priceInt : null, 
+        stockInt !== undefined ? stockInt : null, 
         photoUrl, 
         id
       ]
