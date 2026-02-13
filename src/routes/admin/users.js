@@ -24,6 +24,34 @@ adminUsersRouter.use(authenticate, requireAdmin);
  *     responses:
  *       200:
  *         description: Daftar pengguna
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                   email:
+ *                     type: string
+ *                   username:
+ *                     type: string
+ *                   full_name:
+ *                     type: string
+ *                   phone_number:
+ *                     type: string
+ *                   role:
+ *                     type: string
+ *                   is_verified:
+ *                     type: boolean
+ *                   profile_picture:
+ *                     type: string
+ *                   profile_picture_url:
+ *                     type: string
+ *                   created_at:
+ *                     type: string
+ *                     format: date-time
  */
 adminUsersRouter.get("/", async (req, res) => {
   try {
@@ -68,6 +96,34 @@ adminUsersRouter.get("/", async (req, res) => {
  *     responses:
  *       200:
  *         description: Detail pengguna
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 email:
+ *                   type: string
+ *                 username:
+ *                   type: string
+ *                 full_name:
+ *                   type: string
+ *                 phone_number:
+ *                   type: string
+ *                 address:
+ *                   type: string
+ *                 role:
+ *                   type: string
+ *                 is_verified:
+ *                   type: boolean
+ *                 profile_picture:
+ *                   type: string
+ *                 profile_picture_url:
+ *                   type: string
+ *                 created_at:
+ *                   type: string
+ *                   format: date-time
  *       404:
  *         description: User tidak ditemukan
  */
