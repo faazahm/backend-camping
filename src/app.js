@@ -24,10 +24,19 @@ function createApp() {
 
   app.use(cors());
   app.use(express.json());
-  app.use(helmet());
+  
+  // Konfigurasi Helmet agar tidak memblokir resource cross-origin (gambar)
+  app.use(helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false
+  }));
   
   // Serve folder uploads secara statis agar foto bisa diakses
-  app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+  app.use("/uploads", express.static(path.join(__dirname, "../uploads"), {
+    setHeaders: (res) => {
+      res.set("Cross-Origin-Resource-Policy", "cross-origin");
+    }
+  }));
 
   // Swagger UI
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
