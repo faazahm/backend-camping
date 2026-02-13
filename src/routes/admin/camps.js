@@ -254,7 +254,7 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
            daily_capacity = COALESCE($4, daily_capacity),
            nightly_price = COALESCE($5, nightly_price),
            is_active = COALESCE($6, is_active),
-           photo_url = $7,
+           photo_url = COALESCE($7, photo_url),
            updated_at = NOW()
        WHERE id = $8
        RETURNING *`,
@@ -265,7 +265,7 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
         capacityInt || null, 
         priceInt || null, 
         isActive !== undefined ? isActive : null, 
-        photoUrl, 
+        req.file ? photoUrl : null, 
         id
       ]
     );

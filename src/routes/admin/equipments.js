@@ -233,7 +233,7 @@ adminEquipmentsRouter.put("/:id", upload.single("image"), async (req, res) => {
         description || null, 
         !isNaN(priceInt) ? priceInt : null, 
         !isNaN(stockInt) ? stockInt : null, 
-        photoUrl, 
+        req.file ? photoUrl : null, 
         id
       ]
     );
