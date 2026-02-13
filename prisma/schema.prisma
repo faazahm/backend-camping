@@ -85,7 +85,7 @@ enum BookingStatus {
   PAID
   CANCELLED
   CHECK_IN
-  CHECKOUT
+  CHECK_OUT
 }
 
 enum UserRole {

@@ -1,9 +1,45 @@
 const express = require("express");
 const { db } = require("../../config/db");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 const adminEquipmentsRouter = express.Router();
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Konfigurasi Multer untuk Upload Foto Alat
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = "uploads/equipments";
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, "equipment-" + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png|gif|webp/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+
+  if (extname && mimetype) {
+    return cb(null, true);
+  } else {
+    cb(new Error("Hanya file gambar yang diperbolehkan!"));
+  }
+};
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // Max 5MB
+  fileFilter: fileFilter
+});
 
 /**
  * @swagger
@@ -29,7 +65,14 @@ adminEquipmentsRouter.use(authenticate, requireAdmin);
 adminEquipmentsRouter.get("/", async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM "equipments" ORDER BY created_at ASC');
-    return res.json(result.rows);
+    
+    // Tambahkan URL lengkap untuk photo_url
+    const rows = result.rows.map(row => ({
+      ...row,
+      photo_url_full: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null
+    }));
+    
+    return res.json(rows);
   } catch (err) {
     console.error("Admin Get Equipments Error:", err);
     return res.status(500).json({ message: "Internal server error" });
@@ -47,7 +90,7 @@ adminEquipmentsRouter.get("/", async (req, res) => {
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
@@ -63,20 +106,22 @@ adminEquipmentsRouter.get("/", async (req, res) => {
  *                 type: number
  *               stock:
  *                 type: integer
- *               photoUrl:
+ *               image:
  *                 type: string
+ *                 format: binary
  *     responses:
  *       201:
  *         description: Peralatan berhasil ditambahkan
  *       400:
  *         description: Data tidak lengkap
  */
-adminEquipmentsRouter.post("/", async (req, res) => {
+adminEquipmentsRouter.post("/", upload.single("image"), async (req, res) => {
   try {
-    const body = req.body || {};
-    const { name, description, price, stock, photoUrl } = body;
+    const { name, description, price, stock } = req.body;
+    const photoUrl = req.file ? req.file.path.replace(/\\/g, "/") : null;
 
     if (!name || price === undefined || stock === undefined) {
+      if (photoUrl && fs.existsSync(photoUrl)) fs.unlinkSync(photoUrl);
       return res.status(400).json({ message: "Nama, harga, dan stok wajib diisi" });
     }
 
@@ -84,7 +129,12 @@ adminEquipmentsRouter.post("/", async (req, res) => {
       'INSERT INTO "equipments" (name, description, price, stock, photo_url, updated_at) VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *',
       [name, description, price, stock, photoUrl]
     );
-    return res.status(201).json(result.rows[0]);
+    
+    const row = result.rows[0];
+    return res.status(201).json({
+      ...row,
+      photo_url_full: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null
+    });
   } catch (err) {
     console.error("Admin Create Equipment Error:", err);
     return res.status(500).json({ message: "Internal server error" });
@@ -108,7 +158,7 @@ adminEquipmentsRouter.post("/", async (req, res) => {
  *         description: ID Peralatan (UUID)
  *     requestBody:
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
@@ -120,25 +170,40 @@ adminEquipmentsRouter.post("/", async (req, res) => {
  *                 type: number
  *               stock:
  *                 type: integer
- *               photoUrl:
+ *               image:
  *                 type: string
+ *                 format: binary
  *     responses:
  *       200:
  *         description: Peralatan berhasil diupdate
  *       404:
  *         description: Peralatan tidak ditemukan
  */
-adminEquipmentsRouter.put("/:id", async (req, res) => {
+adminEquipmentsRouter.put("/:id", upload.single("image"), async (req, res) => {
   try {
     const publicId = req.params.id;
-    const { name, description, price, stock, photoUrl } = req.body;
+    const { name, description, price, stock } = req.body;
     
-    if (!UUID_REGEX.test(publicId)) return res.status(400).json({ message: "Invalid UUID" });
+    if (!UUID_REGEX.test(publicId)) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ message: "Invalid UUID" });
+    }
 
-    const check = await db.query('SELECT id FROM "equipments" WHERE public_id = $1', [publicId]);
-    if (check.rows.length === 0) return res.status(404).json({ message: "Alat tidak ditemukan" });
+    const check = await db.query('SELECT id, photo_url FROM "equipments" WHERE public_id = $1', [publicId]);
+    if (check.rows.length === 0) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(404).json({ message: "Alat tidak ditemukan" });
+    }
     
     const id = check.rows[0].id;
+    let photoUrl = check.rows[0].photo_url;
+
+    if (req.file) {
+      if (photoUrl && fs.existsSync(photoUrl)) {
+        try { fs.unlinkSync(photoUrl); } catch (e) {}
+      }
+      photoUrl = req.file.path.replace(/\\/g, "/");
+    }
 
     const result = await db.query(
       `UPDATE "equipments" 
@@ -146,17 +211,30 @@ adminEquipmentsRouter.put("/:id", async (req, res) => {
            description = COALESCE($2, description), 
            price = COALESCE($3, price), 
            stock = COALESCE($4, stock), 
-           photo_url = COALESCE($5, photo_url),
+           photo_url = $5,
            updated_at = NOW()
        WHERE id = $6 RETURNING *`,
-      [name, description, price, stock, photoUrl, id]
+      [
+        name || null, 
+        description || null, 
+        price || null, 
+        stock || null, 
+        photoUrl, 
+        id
+      ]
     );
-    return res.json(result.rows[0]);
+    
+    const row = result.rows[0];
+    return res.json({
+      ...row,
+      photo_url_full: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null
+    });
   } catch (err) {
     console.error("Admin Update Equipment Error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 /**
  * @swagger

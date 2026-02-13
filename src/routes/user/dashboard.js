@@ -24,7 +24,7 @@ const dashboardRouter = express.Router();
  *         name: status
  *         schema:
  *           type: string
- *           enum: [PENDING, PAID, CANCELLED, CHECK_IN, CHECKOUT]
+ *           enum: [PENDING, PAID, CANCELLED, CHECK_IN, CHECK_OUT]
  *         description: Filter berdasarkan status
  *     responses:
  *       200:
@@ -74,7 +74,7 @@ dashboardRouter.get("/history", authenticate, async (req, res) => {
     const params = [userId];
 
     if (status) {
-      const validStatuses = ['PENDING', 'PAID', 'CANCELLED', 'CHECK_IN', 'CHECKOUT'];
+      const validStatuses = ['PENDING', 'PAID', 'CANCELLED', 'CHECK_IN', 'CHECK_OUT'];
       if (validStatuses.includes(status.toUpperCase())) {
         query += ` AND b.status = $2`;
         params.push(status.toUpperCase());

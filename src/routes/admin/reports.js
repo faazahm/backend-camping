@@ -76,7 +76,7 @@ reportsRouter.get("/download", async (req, res) => {
       WHERE 
         EXTRACT(MONTH FROM b.created_at) = $1 
         AND EXTRACT(YEAR FROM b.created_at) = $2
-        AND b.status IN ('PAID', 'CHECK_IN', 'CHECKOUT')
+        AND b.status IN ('PAID', 'CHECK_IN', 'CHECK_OUT')
       ORDER BY b.created_at DESC
     `;
 
@@ -188,7 +188,7 @@ reportsRouter.get("/download", async (req, res) => {
           cell.font = { bold: true, name: 'Segoe UI', size: 9 };
           if (row.status === 'PAID') cell.font.color = { argb: 'FF27AE60' }; // Hijau
           else if (row.status === 'CHECK_IN') cell.font.color = { argb: 'FF2980B9' }; // Biru
-          else if (row.status === 'CHECKOUT') cell.font.color = { argb: 'FF7F8C8D' }; // Abu
+          else if (row.status === 'CHECK_OUT') cell.font.color = { argb: 'FF7F8C8D' }; // Abu
         }
       });
 

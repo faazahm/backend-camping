@@ -1,9 +1,45 @@
 const express = require("express");
 const { db } = require("../../config/db");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 const adminCampsRouter = express.Router();
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Konfigurasi Multer untuk Upload Gambar Camp
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = "uploads/camps";
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, "camp-" + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png|gif|webp/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+
+  if (extname && mimetype) {
+    return cb(null, true);
+  } else {
+    cb(new Error("Hanya file gambar yang diperbolehkan!"));
+  }
+};
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // Max 5MB
+  fileFilter: fileFilter
+});
 
 /**
  * @swagger
@@ -33,7 +69,7 @@ adminCampsRouter.get("/", async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT id, public_id, name, description, location, nightly_price, daily_capacity, is_active, created_at, updated_at
+      `SELECT id, public_id, name, description, location, nightly_price, daily_capacity, is_active, image, created_at, updated_at
        FROM "camps"
        ORDER BY created_at ASC`
     );
@@ -47,6 +83,8 @@ adminCampsRouter.get("/", async (req, res) => {
         nightlyPrice: row.nightly_price,
         dailyCapacity: row.daily_capacity,
         isActive: row.is_active,
+        image: row.image,
+        image_url: row.image ? `${req.protocol}://${req.get("host")}/${row.image}` : null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }))
@@ -68,7 +106,7 @@ adminCampsRouter.get("/", async (req, res) => {
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
@@ -86,25 +124,31 @@ adminCampsRouter.get("/", async (req, res) => {
  *                 type: integer
  *               nightlyPrice:
  *                 type: integer
+ *               image:
+ *                 type: string
+ *                 format: binary
  *     responses:
  *       201:
  *         description: Camp berhasil ditambahkan
  *       400:
  *         description: Data tidak lengkap
  */
-adminCampsRouter.post("/", async (req, res) => {
+adminCampsRouter.post("/", upload.single("image"), async (req, res) => {
   try {
     const { name, description, location, dailyCapacity, nightlyPrice } = req.body;
+    const imagePath = req.file ? req.file.path.replace(/\\/g, "/") : null;
 
     if (!name || dailyCapacity === undefined || nightlyPrice === undefined) {
+      // Jika gagal, hapus file yang sudah terlanjur diupload
+      if (imagePath && fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
       return res.status(400).json({ message: "Nama, kapasitas harian, dan harga per malam wajib diisi" });
     }
 
     const result = await db.query(
-      `INSERT INTO "camps" (name, description, location, daily_capacity, nightly_price, is_active, updated_at)
-       VALUES ($1, $2, $3, $4, $5, true, NOW())
+      `INSERT INTO "camps" (name, description, location, daily_capacity, nightly_price, image, is_active, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, true, NOW())
        RETURNING *`,
-      [name, description, location, dailyCapacity, nightlyPrice]
+      [name, description, location, dailyCapacity, nightlyPrice, imagePath]
     );
 
     const row = result.rows[0];
@@ -116,6 +160,8 @@ adminCampsRouter.post("/", async (req, res) => {
         nightlyPrice: row.nightly_price,
         dailyCapacity: row.daily_capacity,
         isActive: row.is_active,
+        image: row.image,
+        image_url: row.image ? `${req.protocol}://${req.get("host")}/${row.image}` : null,
         createdAt: row.created_at
     });
   } catch (err) {
@@ -142,7 +188,7 @@ adminCampsRouter.post("/", async (req, res) => {
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
@@ -158,27 +204,43 @@ adminCampsRouter.post("/", async (req, res) => {
  *                 type: integer
  *               isActive:
  *                 type: boolean
+ *               image:
+ *                 type: string
+ *                 format: binary
  *     responses:
  *       200:
  *         description: Camp berhasil diupdate
  *       404:
  *         description: Camp tidak ditemukan
  */
-adminCampsRouter.put("/:id", async (req, res) => {
+adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
   try {
     const publicId = req.params.id;
     const { name, description, location, dailyCapacity, nightlyPrice, isActive } = req.body;
 
     if (!UUID_REGEX.test(publicId)) {
+      if (req.file) fs.unlinkSync(req.file.path);
       return res.status(400).json({ message: "ID camp tidak valid" });
     }
 
-    // Check existence
-    const check = await db.query('SELECT id FROM "camps" WHERE public_id = $1', [publicId]);
+    // Check existence and get current image
+    const check = await db.query('SELECT id, image FROM "camps" WHERE public_id = $1', [publicId]);
     if (check.rows.length === 0) {
+      if (req.file) fs.unlinkSync(req.file.path);
       return res.status(404).json({ message: "Camp tidak ditemukan" });
     }
+    
     const id = check.rows[0].id;
+    let imagePath = check.rows[0].image;
+
+    // Jika ada upload gambar baru
+    if (req.file) {
+      // Hapus gambar lama jika ada
+      if (imagePath && fs.existsSync(imagePath)) {
+        try { fs.unlinkSync(imagePath); } catch (e) {}
+      }
+      imagePath = req.file.path.replace(/\\/g, "/");
+    }
 
     const result = await db.query(
       `UPDATE "camps"
@@ -188,10 +250,20 @@ adminCampsRouter.put("/:id", async (req, res) => {
            daily_capacity = COALESCE($4, daily_capacity),
            nightly_price = COALESCE($5, nightly_price),
            is_active = COALESCE($6, is_active),
+           image = $7,
            updated_at = NOW()
-       WHERE id = $7
+       WHERE id = $8
        RETURNING *`,
-      [name, description, location, dailyCapacity, nightlyPrice, isActive, id]
+      [
+        name || null, 
+        description || null, 
+        location || null, 
+        dailyCapacity || null, 
+        nightlyPrice || null, 
+        isActive !== undefined ? isActive : null, 
+        imagePath, 
+        id
+      ]
     );
 
     const row = result.rows[0];
@@ -203,6 +275,8 @@ adminCampsRouter.put("/:id", async (req, res) => {
         nightlyPrice: row.nightly_price,
         dailyCapacity: row.daily_capacity,
         isActive: row.is_active,
+        image: row.image,
+        image_url: row.image ? `${req.protocol}://${req.get("host")}/${row.image}` : null,
         updatedAt: row.updated_at
     });
   } catch (err) {
@@ -210,6 +284,7 @@ adminCampsRouter.put("/:id", async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 /**
  * @swagger

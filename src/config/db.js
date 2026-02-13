@@ -138,9 +138,6 @@ if (db) {
         );
       `);
 
-      // Hapus baris CHECKOUT lama yang tidak konsisten jika perlu (Opsional, tapi sebaiknya biarkan saja agar tidak error)
-      await db.query(`ALTER TYPE "BookingStatus" ADD VALUE IF NOT EXISTS 'CHECKOUT'`);
-
       await db.query(
         `DO $$
          BEGIN
@@ -198,6 +195,19 @@ if (db) {
            ) THEN
              ALTER TABLE "users" ADD COLUMN "google_id" VARCHAR(255);
              ALTER TABLE "users" ADD CONSTRAINT "users_google_id_key" UNIQUE ("google_id");
+           END IF;
+         END $$;`
+      );
+
+      // Add image column to camps table
+      await db.query(
+        `DO $$
+         BEGIN
+           IF NOT EXISTS (
+             SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'camps' AND column_name = 'image'
+           ) THEN
+             ALTER TABLE "camps" ADD COLUMN "image" TEXT;
            END IF;
          END $$;`
       );

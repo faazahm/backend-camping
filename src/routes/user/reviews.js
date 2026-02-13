@@ -45,13 +45,13 @@ reviewsRouter.get("/pending", async (req, res) => {
       options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
     }));
 
-    // Cari booking dengan status CHECKOUT yang belum ada di tabel reviews
+    // Cari booking dengan status CHECK_OUT yang belum ada di tabel reviews
     const query = `
       SELECT b.id, b.public_id, b.start_date, b.end_date, c.name as camp_name
       FROM bookings b
       JOIN camps c ON b.camp_id = c.id
       WHERE b.user_id = $1 
-      AND b.status = 'CHECKOUT'
+      AND b.status = 'CHECK_OUT'
       AND NOT EXISTS (
         SELECT 1 FROM reviews r WHERE r.booking_id = b.id
       )
@@ -125,7 +125,7 @@ reviewsRouter.post("/", async (req, res) => {
 
     // Validasi booking
     const bookingCheck = await db.query(
-      "SELECT id FROM bookings WHERE public_id = $1 AND user_id = $2 AND status = 'CHECKOUT'",
+      "SELECT id FROM bookings WHERE public_id = $1 AND user_id = $2 AND status = 'CHECK_OUT'",
       [bookingId, userId]
     );
 

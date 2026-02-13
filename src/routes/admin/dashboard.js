@@ -40,16 +40,16 @@ adminDashboardRouter.get("/stats", async (req, res) => {
           COUNT(*) FILTER (WHERE status = 'PENDING') as pending,
           COUNT(*) FILTER (WHERE status = 'PAID') as paid,
           COUNT(*) FILTER (WHERE status = 'CHECK_IN') as check_in,
-          COUNT(*) FILTER (WHERE status = 'CHECKOUT') as completed,
+          COUNT(*) FILTER (WHERE status = 'CHECK_OUT') as completed,
           COUNT(*) FILTER (WHERE status = 'CANCELLED') as cancelled
         FROM bookings
       `),
       
-      // Calculate total revenue (only PAID, CHECK_IN, CHECKOUT)
+      // Calculate total revenue (only PAID, CHECK_IN, CHECK_OUT)
       db.query(`
         SELECT COALESCE(SUM(total_price), 0) as total_revenue
         FROM bookings
-        WHERE status IN ('PAID', 'CHECK_IN', 'CHECKOUT')
+        WHERE status IN ('PAID', 'CHECK_IN', 'CHECK_OUT')
       `),
 
       // Count active camps
@@ -104,7 +104,7 @@ adminDashboardRouter.get("/stats/monthly-revenue", async (req, res) => {
     }
 
     // Query untuk mengambil pendapatan per bulan selama 12 bulan terakhir
-    // Hanya menghitung status PAID, CHECK_IN, CHECKOUT
+    // Hanya menghitung status PAID, CHECK_IN, CHECK_OUT
     const query = `
       SELECT 
         TO_CHAR(date_trunc('month', created_at), 'Mon YYYY') as month_label,
@@ -114,7 +114,7 @@ adminDashboardRouter.get("/stats/monthly-revenue", async (req, res) => {
         COUNT(id) as total_bookings
       FROM bookings
       WHERE 
-        status IN ('PAID', 'CHECK_IN', 'CHECKOUT') 
+        status IN ('PAID', 'CHECK_IN', 'CHECK_OUT') 
         AND created_at >= NOW() - INTERVAL '12 months'
       GROUP BY 1, 2, 3
       ORDER BY year_number DESC, month_number DESC
