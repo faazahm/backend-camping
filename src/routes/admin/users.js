@@ -32,12 +32,19 @@ adminUsersRouter.get("/", async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT id, email, username, full_name, phone_number, role, is_verified, created_at 
+      `SELECT id, email, username, full_name, phone_number, role, is_verified, profile_picture, created_at 
        FROM users 
        ORDER BY created_at DESC`
     );
 
-    return res.json(result.rows);
+    const users = result.rows.map(user => ({
+      ...user,
+      profile_picture_url: user.profile_picture 
+        ? `${req.protocol}://${req.get("host")}/${user.profile_picture}` 
+        : null
+    }));
+
+    return res.json(users);
   } catch (err) {
     console.error("Admin Users Error:", err);
     return res.status(500).json({ message: "Internal server error" });
