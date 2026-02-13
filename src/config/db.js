@@ -199,15 +199,15 @@ if (db) {
          END $$;`
       );
 
-      // Add image column to camps table
+      // Add photo_url column to camps table
       await db.query(
         `DO $$
          BEGIN
            IF NOT EXISTS (
              SELECT 1 FROM information_schema.columns
-             WHERE table_schema = 'public' AND table_name = 'camps' AND column_name = 'image'
+             WHERE table_schema = 'public' AND table_name = 'camps' AND column_name = 'photo_url'
            ) THEN
-             ALTER TABLE "camps" ADD COLUMN "image" TEXT;
+             ALTER TABLE "camps" ADD COLUMN "photo_url" TEXT;
            END IF;
          END $$;`
       );

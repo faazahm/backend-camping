@@ -39,6 +39,7 @@ model Camp {
   nightlyPrice Int       @map("nightly_price")
   dailyCapacity Int      @map("daily_capacity")
   isActive     Boolean   @default(true) @map("is_active")
+  photoUrl     String?   @map("photo_url")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   bookings     Booking[]

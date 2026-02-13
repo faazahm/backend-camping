@@ -69,7 +69,7 @@ adminCampsRouter.get("/", async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT id, public_id, name, description, location, nightly_price, daily_capacity, is_active, image, created_at, updated_at
+      `SELECT id, public_id, name, description, location, nightly_price, daily_capacity, is_active, photo_url, created_at, updated_at
        FROM "camps"
        ORDER BY created_at ASC`
     );
@@ -83,8 +83,8 @@ adminCampsRouter.get("/", async (req, res) => {
         nightlyPrice: row.nightly_price,
         dailyCapacity: row.daily_capacity,
         isActive: row.is_active,
-        image: row.image,
-        image_url: row.image ? `${req.protocol}://${req.get("host")}/${row.image}` : null,
+        image: row.photo_url,
+        image_url: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }))
@@ -136,19 +136,19 @@ adminCampsRouter.get("/", async (req, res) => {
 adminCampsRouter.post("/", upload.single("image"), async (req, res) => {
   try {
     const { name, description, location, dailyCapacity, nightlyPrice } = req.body;
-    const imagePath = req.file ? req.file.path.replace(/\\/g, "/") : null;
+    const photoUrl = req.file ? req.file.path.replace(/\\/g, "/") : null;
 
     if (!name || dailyCapacity === undefined || nightlyPrice === undefined) {
       // Jika gagal, hapus file yang sudah terlanjur diupload
-      if (imagePath && fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+      if (photoUrl && fs.existsSync(photoUrl)) fs.unlinkSync(photoUrl);
       return res.status(400).json({ message: "Nama, kapasitas harian, dan harga per malam wajib diisi" });
     }
 
     const result = await db.query(
-      `INSERT INTO "camps" (name, description, location, daily_capacity, nightly_price, image, is_active, updated_at)
+      `INSERT INTO "camps" (name, description, location, daily_capacity, nightly_price, photo_url, is_active, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, true, NOW())
        RETURNING *`,
-      [name, description, location, dailyCapacity, nightlyPrice, imagePath]
+      [name, description, location, dailyCapacity, nightlyPrice, photoUrl]
     );
 
     const row = result.rows[0];
@@ -160,8 +160,8 @@ adminCampsRouter.post("/", upload.single("image"), async (req, res) => {
         nightlyPrice: row.nightly_price,
         dailyCapacity: row.daily_capacity,
         isActive: row.is_active,
-        image: row.image,
-        image_url: row.image ? `${req.protocol}://${req.get("host")}/${row.image}` : null,
+        image: row.photo_url,
+        image_url: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null,
         createdAt: row.created_at
     });
   } catch (err) {
@@ -224,22 +224,22 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
     }
 
     // Check existence and get current image
-    const check = await db.query('SELECT id, image FROM "camps" WHERE public_id = $1', [publicId]);
+    const check = await db.query('SELECT id, photo_url FROM "camps" WHERE public_id = $1', [publicId]);
     if (check.rows.length === 0) {
       if (req.file) fs.unlinkSync(req.file.path);
       return res.status(404).json({ message: "Camp tidak ditemukan" });
     }
     
     const id = check.rows[0].id;
-    let imagePath = check.rows[0].image;
+    let photoUrl = check.rows[0].photo_url;
 
     // Jika ada upload gambar baru
     if (req.file) {
       // Hapus gambar lama jika ada
-      if (imagePath && fs.existsSync(imagePath)) {
-        try { fs.unlinkSync(imagePath); } catch (e) {}
+      if (photoUrl && fs.existsSync(photoUrl)) {
+        try { fs.unlinkSync(photoUrl); } catch (e) {}
       }
-      imagePath = req.file.path.replace(/\\/g, "/");
+      photoUrl = req.file.path.replace(/\\/g, "/");
     }
 
     const result = await db.query(
@@ -250,7 +250,7 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
            daily_capacity = COALESCE($4, daily_capacity),
            nightly_price = COALESCE($5, nightly_price),
            is_active = COALESCE($6, is_active),
-           image = $7,
+           photo_url = $7,
            updated_at = NOW()
        WHERE id = $8
        RETURNING *`,
@@ -261,7 +261,7 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
         dailyCapacity || null, 
         nightlyPrice || null, 
         isActive !== undefined ? isActive : null, 
-        imagePath, 
+        photoUrl, 
         id
       ]
     );
@@ -275,8 +275,8 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
         nightlyPrice: row.nightly_price,
         dailyCapacity: row.daily_capacity,
         isActive: row.is_active,
-        image: row.image,
-        image_url: row.image ? `${req.protocol}://${req.get("host")}/${row.image}` : null,
+        image: row.photo_url,
+        image_url: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null,
         updatedAt: row.updated_at
     });
   } catch (err) {
