@@ -206,9 +206,15 @@ adminEquipmentsRouter.put("/:id", upload.single("image"), async (req, res) => {
     const priceInt = price !== undefined ? parseInt(price, 10) : undefined;
     const stockInt = stock !== undefined ? parseInt(stock, 10) : undefined;
 
+    // Jika ada upload gambar baru
     if (req.file) {
+      // Hapus gambar lama jika ada
       if (photoUrl && fs.existsSync(photoUrl)) {
-        try { fs.unlinkSync(photoUrl); } catch (e) {}
+        try {
+          fs.unlinkSync(photoUrl);
+        } catch (e) {
+          console.error("Gagal menghapus gambar lama:", e);
+        }
       }
       photoUrl = req.file.path.replace(/\\/g, "/");
     }
@@ -219,14 +225,14 @@ adminEquipmentsRouter.put("/:id", upload.single("image"), async (req, res) => {
            description = COALESCE($2, description), 
            price = COALESCE($3, price), 
            stock = COALESCE($4, stock), 
-           photo_url = $5,
+           photo_url = COALESCE($5, photo_url),
            updated_at = NOW()
        WHERE id = $6 RETURNING *`,
       [
         name || null, 
         description || null, 
-        priceInt !== undefined ? priceInt : null, 
-        stockInt !== undefined ? stockInt : null, 
+        !isNaN(priceInt) ? priceInt : null, 
+        !isNaN(stockInt) ? stockInt : null, 
         photoUrl, 
         id
       ]
