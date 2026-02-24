@@ -18,6 +18,47 @@ const UUID_REGEX =
 
 /**
  * @swagger
+ * /booking/camps:
+ *   get:
+ *     summary: Mendapatkan daftar semua camp yang aktif
+ *     tags: [Booking]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Daftar camp tersedia
+ */
+bookingRouter.get("/camps", authenticate, async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ message: "Database is not configured" });
+    }
+
+    const result = await db.query(
+      `SELECT public_id, name, description, location, nightly_price, photo_url 
+       FROM "camps" 
+       WHERE is_active = true 
+       ORDER BY name ASC`
+    );
+
+    return res.json(
+      result.rows.map((row) => ({
+        id: row.public_id,
+        name: row.name,
+        description: row.description,
+        location: row.location,
+        nightlyPrice: row.nightly_price,
+        image_url: row.photo_url ? (row.photo_url.startsWith('http') ? row.photo_url : `${req.protocol}://${req.get("host")}/${row.photo_url}`) : null,
+      }))
+    );
+  } catch (err) {
+    console.error("Get User Camps Error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+/**
+ * @swagger
  * /booking/equipments:
  *   get:
  *     summary: Cek ketersediaan peralatan
