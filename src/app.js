@@ -64,6 +64,10 @@ function createApp() {
   // Also mount at root for backward compatibility
   mountRoutes(app);
 
+  app.get("/", (req, res) => {
+    res.json({ status: "ok", message: "Backend camping API running" });
+  });
+
   // 404 Handler with Logging (To debug 404 issues)
   app.use((req, res, next) => {
     console.warn(`[404] ${req.method} ${req.originalUrl} - Not Found`);
@@ -83,10 +87,6 @@ function createApp() {
     }
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
-  });
-
-  app.get("/", (req, res) => {
-    res.json({ status: "ok", message: "Backend camping API running" });
   });
 
   return app;
