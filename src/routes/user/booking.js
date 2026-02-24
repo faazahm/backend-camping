@@ -7,28 +7,15 @@ const bookingRouter = express.Router();
 
 /**
  * @swagger
- * tags:
- *   name: Booking
- *   description: Manajemen pemesanan camping dan peralatan
- */
-
-const PRICE_PER_PERSON_PER_DAY = 10000;
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-/**
- * @swagger
  * /booking/camps:
  *   get:
- *     summary: Mendapatkan daftar semua camp yang aktif
+ *     summary: Mendapatkan daftar semua camp yang aktif (Public)
  *     tags: [Booking]
- *     security:
- *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Daftar camp tersedia
  */
-bookingRouter.get("/camps", authenticate, async (req, res) => {
+bookingRouter.get("/camps", async (req, res) => {
   try {
     if (!db) {
       return res.status(500).json({ message: "Database is not configured" });
@@ -56,6 +43,17 @@ bookingRouter.get("/camps", authenticate, async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 });
+
+/**
+ * @swagger
+ * tags:
+ *   name: Booking
+ *   description: Manajemen pemesanan camping dan peralatan
+ */
+
+const PRICE_PER_PERSON_PER_DAY = 10000;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * @swagger
