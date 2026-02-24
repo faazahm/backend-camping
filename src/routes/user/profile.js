@@ -1,33 +1,14 @@
 const express = require("express");
 const { db } = require("../../config/db");
 const { authenticate } = require("../../middleware/auth");
+const { uploadToSupabase } = require("../../utils/supabase");
 const multer = require("multer");
 const path = require("path");
-const fs = require("fs");
 
 const profileRouter = express.Router();
 
-/**
- * @swagger
- * tags:
- *   name: Profile
- *   description: Manajemen profil pengguna
- */
-
-// Konfigurasi Multer untuk Upload Foto
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = "uploads/profiles";
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, "profile-" + uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// Konfigurasi Multer untuk Upload Foto (Memory Storage untuk Supabase)
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif/;
@@ -43,7 +24,7 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Maksimal 5MB (sebelumnya 2MB)
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: fileFilter
 });
 
@@ -127,7 +108,7 @@ profileRouter.get("/", authenticate, async (req, res) => {
 const updateProfileHandler = async (req, res) => {
   console.log(`[Profile] ${req.method} request received`);
   console.log("[Profile] Body:", req.body);
-  console.log("[Profile] File:", req.file ? req.file.filename : "No file uploaded");
+  console.log("[Profile] File:", req.file ? "File uploaded" : "No file uploaded");
 
   try {
     if (!db) {
@@ -139,24 +120,18 @@ const updateProfileHandler = async (req, res) => {
     
     // Ambil data user lama
     const currentUser = await db.query("SELECT profile_picture FROM users WHERE id = $1", [userId]);
-    let profilePicturePath = currentUser.rows[0]?.profile_picture;
+    let profilePictureUrl = currentUser.rows[0]?.profile_picture;
 
-    // Jika ada file baru yang diupload
+    // Jika ada file baru yang diupload ke Supabase
     if (req.file) {
-      // Hapus foto lama jika ada dan bukan default
-      if (profilePicturePath && fs.existsSync(profilePicturePath)) {
-        try {
-          fs.unlinkSync(profilePicturePath);
-        } catch (e) {
-          console.error("Gagal menghapus foto lama:", e);
-        }
+      try {
+        // Upload ke Supabase Storage (Bucket: profiles, Folder: user-profiles)
+        profilePictureUrl = await uploadToSupabase(req.file, "profiles", "user-profiles");
+      } catch (uploadError) {
+        return res.status(500).json({ message: "Gagal upload gambar ke Supabase" });
       }
-      // Simpan path baru dengan normalisasi slash
-      profilePicturePath = req.file.path.replace(/\\/g, "/");
     }
 
-    // Gunakan COALESCE agar jika field tidak dikirim, data lama tetap terjaga
-    // Namun khusus untuk profilePicturePath, kita masukkan nilai yang sudah kita proses di atas
     const result = await db.query(
       `UPDATE users 
        SET full_name = COALESCE($1, full_name),
@@ -169,7 +144,7 @@ const updateProfileHandler = async (req, res) => {
         full_name || null, 
         phone_number || null, 
         address || null, 
-        profilePicturePath || null, 
+        profilePictureUrl || null, 
         userId
       ]
     );
@@ -177,7 +152,10 @@ const updateProfileHandler = async (req, res) => {
     const updatedUser = result.rows[0];
     
     if (updatedUser && updatedUser.profile_picture) {
-      updatedUser.profile_picture_url = `${req.protocol}://${req.get("host")}/${updatedUser.profile_picture}`;
+      // Jika profile_picture adalah URL lengkap (dari Supabase), gunakan langsung
+      updatedUser.profile_picture_url = updatedUser.profile_picture.startsWith('http') 
+        ? updatedUser.profile_picture 
+        : `${req.protocol}://${req.get("host")}/${updatedUser.profile_picture}`;
     }
 
     return res.json({
