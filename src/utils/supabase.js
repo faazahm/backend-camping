@@ -3,11 +3,13 @@ const { createClient } = require('@supabase/supabase-js');
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-  console.warn('[Supabase] SUPABASE_URL atau SUPABASE_ANON_KEY tidak ditemukan di environment variables.');
-}
+let supabase = null;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+if (supabaseUrl && supabaseKey) {
+  supabase = createClient(supabaseUrl, supabaseKey);
+} else {
+  console.error('[Supabase] CRITICAL: SUPABASE_URL atau SUPABASE_ANON_KEY tidak ditemukan. Fitur upload gambar akan gagal.');
+}
 
 /**
  * Upload file ke Supabase Storage
@@ -17,6 +19,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * @returns {Promise<string>} - URL publik file yang diupload
  */
 const uploadToSupabase = async (file, bucket, folder = '') => {
+  if (!supabase) {
+    throw new Error("Supabase client is not initialized. Check your environment variables.");
+  }
   try {
     const fileExt = file.originalname.split('.').pop();
     const fileName = `${folder}/${Date.now()}-${Math.round(Math.random() * 1e9)}.${fileExt}`;
