@@ -1,27 +1,15 @@
 const express = require("express");
 const { db } = require("../../config/db");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
+const { uploadToSupabase } = require("../../utils/supabase");
 const multer = require("multer");
 const path = require("path");
-const fs = require("fs");
 
 const adminEquipmentsRouter = express.Router();
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// Konfigurasi Multer untuk Upload Foto Alat
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = "uploads/equipments";
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, "equipment-" + uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// Konfigurasi Multer untuk Upload Foto Alat (Memory Storage untuk Supabase)
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -69,7 +57,7 @@ adminEquipmentsRouter.get("/", async (req, res) => {
     // Tambahkan URL lengkap untuk photo_url
     const rows = result.rows.map(row => ({
       ...row,
-      photo_url_full: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null
+      photo_url_full: row.photo_url ? (row.photo_url.startsWith('http') ? row.photo_url : `${req.protocol}://${req.get("host")}/${row.photo_url}`) : null
     }));
     
     return res.json(rows);
@@ -118,15 +106,23 @@ adminEquipmentsRouter.get("/", async (req, res) => {
 adminEquipmentsRouter.post("/", upload.single("image"), async (req, res) => {
   try {
     const { name, description, price, stock } = req.body;
-    const photoUrl = req.file ? req.file.path.replace(/\\/g, "/") : null;
+    let photoUrl = null;
 
     // Konversi ke Integer murni untuk menghindari pembulatan atau manipulasi otomatis
     const priceInt = parseInt(price, 10);
     const stockInt = parseInt(stock, 10);
 
     if (!name || isNaN(priceInt) || isNaN(stockInt)) {
-      if (photoUrl && fs.existsSync(photoUrl)) fs.unlinkSync(photoUrl);
       return res.status(400).json({ message: "Nama, harga, dan stok wajib diisi dengan angka valid" });
+    }
+
+    // Jika ada file gambar, upload ke Supabase
+    if (req.file) {
+      try {
+        photoUrl = await uploadToSupabase(req.file, "equipments", "equipment-images");
+      } catch (uploadError) {
+        return res.status(500).json({ message: "Gagal upload gambar ke Supabase" });
+      }
     }
 
     const result = await db.query(
@@ -137,7 +133,7 @@ adminEquipmentsRouter.post("/", upload.single("image"), async (req, res) => {
     const row = result.rows[0];
     return res.status(201).json({
       ...row,
-      photo_url_full: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null
+      photo_url_full: row.photo_url ? (row.photo_url.startsWith('http') ? row.photo_url : `${req.protocol}://${req.get("host")}/${row.photo_url}`) : null
     });
   } catch (err) {
     console.error("Admin Create Equipment Error:", err);
@@ -189,59 +185,53 @@ adminEquipmentsRouter.put("/:id", upload.single("image"), async (req, res) => {
     const { name, description, price, stock } = req.body;
     
     if (!UUID_REGEX.test(publicId)) {
-      if (req.file) fs.unlinkSync(req.file.path);
       return res.status(400).json({ message: "Invalid UUID" });
     }
 
     const check = await db.query('SELECT id, photo_url FROM "equipments" WHERE public_id = $1', [publicId]);
     if (check.rows.length === 0) {
-      if (req.file) fs.unlinkSync(req.file.path);
       return res.status(404).json({ message: "Alat tidak ditemukan" });
     }
     
     const id = check.rows[0].id;
     let photoUrl = check.rows[0].photo_url;
 
-    // Konversi ke Integer murni untuk menghindari pembulatan atau manipulasi otomatis
+    // Jika ada upload gambar baru ke Supabase
+    if (req.file) {
+      try {
+        photoUrl = await uploadToSupabase(req.file, "equipments", "equipment-images");
+      } catch (uploadError) {
+        return res.status(500).json({ message: "Gagal upload gambar ke Supabase" });
+      }
+    }
+
     const priceInt = price !== undefined ? parseInt(price, 10) : undefined;
     const stockInt = stock !== undefined ? parseInt(stock, 10) : undefined;
 
-    // Jika ada upload gambar baru
-    if (req.file) {
-      // Hapus gambar lama jika ada
-      if (photoUrl && fs.existsSync(photoUrl)) {
-        try {
-          fs.unlinkSync(photoUrl);
-        } catch (e) {
-          console.error("Gagal menghapus gambar lama:", e);
-        }
-      }
-      photoUrl = req.file.path.replace(/\\/g, "/");
-    }
-
     const result = await db.query(
-      `UPDATE "equipments" 
-       SET name = COALESCE($1, name), 
-           description = COALESCE($2, description), 
-           price = COALESCE($3, price), 
-           stock = COALESCE($4, stock), 
-           photo_url = COALESCE($5, photo_url),
+      `UPDATE "equipments"
+       SET name = COALESCE($1, name),
+           description = COALESCE($2, description),
+           price = COALESCE($3, price),
+           stock = COALESCE($4, stock),
+           photo_url = $5,
            updated_at = NOW()
-       WHERE id = $6 RETURNING *`,
+       WHERE id = $6
+       RETURNING *`,
       [
         name || null, 
         description || null, 
         !isNaN(priceInt) ? priceInt : null, 
         !isNaN(stockInt) ? stockInt : null, 
-        req.file ? photoUrl : null, 
+        photoUrl, 
         id
       ]
     );
-    
+
     const row = result.rows[0];
     return res.json({
       ...row,
-      photo_url_full: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null
+      photo_url_full: row.photo_url ? (row.photo_url.startsWith('http') ? row.photo_url : `${req.protocol}://${req.get("host")}/${row.photo_url}`) : null
     });
   } catch (err) {
     console.error("Admin Update Equipment Error:", err);

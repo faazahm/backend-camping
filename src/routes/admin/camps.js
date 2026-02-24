@@ -1,27 +1,15 @@
 const express = require("express");
 const { db } = require("../../config/db");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
+const { uploadToSupabase } = require("../../utils/supabase");
 const multer = require("multer");
 const path = require("path");
-const fs = require("fs");
 
 const adminCampsRouter = express.Router();
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// Konfigurasi Multer untuk Upload Gambar Camp
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = "uploads/camps";
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, "camp-" + uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// Konfigurasi Multer untuk Upload Gambar Camp (Memory Storage untuk Supabase)
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -84,7 +72,7 @@ adminCampsRouter.get("/", async (req, res) => {
         dailyCapacity: row.daily_capacity,
         isActive: row.is_active,
         image: row.photo_url,
-        image_url: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null,
+        image_url: row.photo_url ? (row.photo_url.startsWith('http') ? row.photo_url : `${req.protocol}://${req.get("host")}/${row.photo_url}`) : null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }))
@@ -136,12 +124,19 @@ adminCampsRouter.get("/", async (req, res) => {
 adminCampsRouter.post("/", upload.single("image"), async (req, res) => {
   try {
     const { name, description, location, dailyCapacity, nightlyPrice } = req.body;
-    const photoUrl = req.file ? req.file.path.replace(/\\/g, "/") : null;
+    let photoUrl = null;
 
     if (!name || dailyCapacity === undefined || nightlyPrice === undefined) {
-      // Jika gagal, hapus file yang sudah terlanjur diupload
-      if (photoUrl && fs.existsSync(photoUrl)) fs.unlinkSync(photoUrl);
       return res.status(400).json({ message: "Nama, kapasitas harian, dan harga per malam wajib diisi" });
+    }
+
+    // Jika ada file gambar, upload ke Supabase
+    if (req.file) {
+      try {
+        photoUrl = await uploadToSupabase(req.file, "camps", "camp-images");
+      } catch (uploadError) {
+        return res.status(500).json({ message: "Gagal upload gambar ke Supabase" });
+      }
     }
 
     const result = await db.query(
@@ -219,14 +214,12 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
     const { name, description, location, dailyCapacity, nightlyPrice, isActive } = req.body;
 
     if (!UUID_REGEX.test(publicId)) {
-      if (req.file) fs.unlinkSync(req.file.path);
       return res.status(400).json({ message: "ID camp tidak valid" });
     }
 
     // Check existence and get current image
     const check = await db.query('SELECT id, photo_url FROM "camps" WHERE public_id = $1', [publicId]);
     if (check.rows.length === 0) {
-      if (req.file) fs.unlinkSync(req.file.path);
       return res.status(404).json({ message: "Camp tidak ditemukan" });
     }
     
@@ -237,13 +230,13 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
     const capacityInt = dailyCapacity !== undefined ? parseInt(dailyCapacity, 10) : undefined;
     const priceInt = nightlyPrice !== undefined ? parseInt(nightlyPrice, 10) : undefined;
 
-    // Jika ada upload gambar baru
+    // Jika ada upload gambar baru ke Supabase
     if (req.file) {
-      // Hapus gambar lama jika ada
-      if (photoUrl && fs.existsSync(photoUrl)) {
-        try { fs.unlinkSync(photoUrl); } catch (e) {}
+      try {
+        photoUrl = await uploadToSupabase(req.file, "camps", "camp-images");
+      } catch (uploadError) {
+        return res.status(500).json({ message: "Gagal upload gambar ke Supabase" });
       }
-      photoUrl = req.file.path.replace(/\\/g, "/");
     }
 
     const result = await db.query(
@@ -254,7 +247,7 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
            daily_capacity = COALESCE($4, daily_capacity),
            nightly_price = COALESCE($5, nightly_price),
            is_active = COALESCE($6, is_active),
-           photo_url = COALESCE($7, photo_url),
+           photo_url = $7,
            updated_at = NOW()
        WHERE id = $8
        RETURNING *`,
@@ -265,7 +258,7 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
         capacityInt || null, 
         priceInt || null, 
         isActive !== undefined ? isActive : null, 
-        req.file ? photoUrl : null, 
+        photoUrl, 
         id
       ]
     );
@@ -280,7 +273,7 @@ adminCampsRouter.put("/:id", upload.single("image"), async (req, res) => {
         dailyCapacity: row.daily_capacity,
         isActive: row.is_active,
         image: row.photo_url,
-        image_url: row.photo_url ? `${req.protocol}://${req.get("host")}/${row.photo_url}` : null,
+        image_url: row.photo_url ? (row.photo_url.startsWith('http') ? row.photo_url : `${req.protocol}://${req.get("host")}/${row.photo_url}`) : null,
         updatedAt: row.updated_at
     });
   } catch (err) {
