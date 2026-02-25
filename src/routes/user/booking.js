@@ -928,14 +928,17 @@ bookingRouter.put("/:bookingId/equipments", authenticate, async (req, res) => {
 
     await client.query("COMMIT");
 
-    return res.json({
+    return res.status(201).json({
+      message: "Booking berhasil dibuat. Silakan lakukan pembayaran.",
       id: booking.public_id,
-      campId,
-      startDate,
-      endDate,
-      peopleCount,
       totalPrice,
-      status: booking.status,
+      status: "PENDING",
+      payment_instructions: {
+        method: "QRIS / Transfer Bank",
+        account_name: "Potrobayan Camping Ground",
+        qr_url: "https://arfkxqnuczyrbkizvsqv.supabase.co/storage/v1/object/public/bookings/qris.png",
+        instructions: "Silakan scan QRIS di atas atau transfer ke rekening yang tertera, lalu unggah bukti pembayaran melalui tombol 'Upload Bukti'."
+      }
     });
   } catch (err) {
     if (client) {
