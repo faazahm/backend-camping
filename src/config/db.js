@@ -240,7 +240,8 @@ if (db) {
 
       await db.query(`
         ALTER TABLE "booking_equipments"
-        ADD COLUMN IF NOT EXISTS "nights" INTEGER NOT NULL DEFAULT 1;
+        ADD COLUMN IF NOT EXISTS "nights" INTEGER NOT NULL DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS "price" INTEGER NOT NULL DEFAULT 0;
       `);
 
       await db.query(`
