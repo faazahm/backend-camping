@@ -242,6 +242,11 @@ if (db) {
         ALTER TABLE "booking_equipments"
         ADD COLUMN IF NOT EXISTS "nights" INTEGER NOT NULL DEFAULT 1;
       `);
+
+      await db.query(`
+        ALTER TABLE "bookings"
+        ADD COLUMN IF NOT EXISTS "payment_proof" TEXT;
+      `);
     } catch (e) {
       console.error("Database bootstrap error:", e);
     }

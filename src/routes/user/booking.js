@@ -1,9 +1,24 @@
 const express = require("express");
 const { db } = require("../../config/db");
 const { authenticate } = require("../../middleware/auth");
+const { uploadToSupabase } = require("../../utils/supabase");
+const multer = require("multer");
+const path = require("path");
 const { getIO } = require("../../realtime/io");
 
 const bookingRouter = express.Router();
+
+// Multer memory storage for payment proof
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|webp/;
+    const isValid = allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype);
+    cb(isValid ? null : new Error("Hanya file gambar yang diperbolehkan"), isValid);
+  }
+});
 
 /**
  * @swagger
@@ -939,7 +954,7 @@ bookingRouter.put("/:bookingId/equipments", authenticate, async (req, res) => {
  * @swagger
  * /booking/{bookingId}/pay:
  *   post:
- *     summary: Melakukan pembayaran (Simulasi)
+ *     summary: Unggah bukti pembayaran (Upload QR/Transfer)
  *     tags: [Booking]
  *     security:
  *       - bearerAuth: []
@@ -950,16 +965,25 @@ bookingRouter.put("/:bookingId/equipments", authenticate, async (req, res) => {
  *         schema:
  *           type: string
  *         description: ID Booking (UUID)
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               payment_proof:
+ *                 type: string
+ *                 format: binary
  *     responses:
  *       200:
- *         description: Pembayaran berhasil
+ *         description: Bukti pembayaran berhasil diunggah
  *       400:
  *         description: Booking tidak valid atau sudah dibayar
  *       404:
  *         description: Booking tidak ditemukan
  */
-// TEMPORARY: Simulate Payment Endpoint
-bookingRouter.post("/:bookingId/pay", authenticate, async (req, res) => {
+// Upload Payment Proof (Manual Verification Flow)
+bookingRouter.post("/:bookingId/pay", authenticate, upload.single("payment_proof"), async (req, res) => {
   try {
     if (!db) {
       return res.status(500).json({ message: "Database is not configured" });
@@ -972,7 +996,7 @@ bookingRouter.post("/:bookingId/pay", authenticate, async (req, res) => {
     }
 
     const { rows } = await db.query(
-      'SELECT id, user_id, status, total_price FROM "bookings" WHERE public_id = $1',
+      'SELECT id, user_id, status FROM "bookings" WHERE public_id = $1',
       [bookingPublicId]
     );
 
@@ -982,37 +1006,40 @@ bookingRouter.post("/:bookingId/pay", authenticate, async (req, res) => {
 
     const booking = rows[0];
 
-    // Ensure user owns the booking or is admin
+    // Ensure user owns the booking
     if (booking.user_id !== req.user.id && req.user.role !== "ADMIN") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
     if (booking.status !== "PENDING") {
-      return res.status(400).json({ message: `Booking status is ${booking.status}, cannot pay.` });
+      return res.status(400).json({ message: `Status booking adalah ${booking.status}, tidak bisa mengunggah bukti.` });
     }
 
-    // Simulate Payment Success
-    await db.query('UPDATE "bookings" SET status = $1 WHERE id = $2', [
-      "PAID",
+    if (!req.file) {
+      return res.status(400).json({ message: "File bukti pembayaran wajib diunggah" });
+    }
+
+    // Upload to Supabase Storage (Bucket: bookings, Folder: payments)
+    let paymentProofUrl;
+    try {
+      paymentProofUrl = await uploadToSupabase(req.file, "bookings", "payments");
+    } catch (uploadError) {
+      return res.status(500).json({ message: "Gagal mengunggah bukti ke Supabase" });
+    }
+
+    // Update payment_proof, but keep status as PENDING (Admin will verify)
+    await db.query('UPDATE "bookings" SET payment_proof = $1 WHERE id = $2', [
+      paymentProofUrl,
       booking.id,
     ]);
-    
-    // Optional: Emit socket event if needed
-    const io = getIO();
-    if (io) {
-      io.emit("booking:updated", {
-        id: bookingPublicId,
-        status: "PAID",
-      });
-    }
 
-    return res.json({
-      message: "Pembayaran berhasil (Simulasi)",
-      status: "PAID",
-      amount: booking.total_price
+    return res.json({ 
+      message: "Bukti pembayaran berhasil diunggah. Menunggu verifikasi admin.",
+      payment_proof_url: paymentProofUrl
     });
+
   } catch (err) {
-    console.error(err);
+    console.error("Payment Upload Error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });

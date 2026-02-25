@@ -70,6 +70,7 @@ adminBookingsRouter.get("/", async (req, res) => {
         b.people_count,
         b.total_price,
         b.status,
+        b.payment_proof,
         b.created_at,
         u.username,
         u.email,
