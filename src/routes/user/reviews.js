@@ -252,42 +252,66 @@ reviewsRouter.post("/", async (req, res) => {
     }
 
     // 4. Hitung Nilai Per Aspek & Total Score
-    // Urutan jawaban diasumsikan sesuai urutan pertanyaan (1-10)
-    // Map answers by question_id for safety
+    // Ambil semua pertanyaan aktif untuk memetakan jawaban ke aspek
+    const qResult = await db.query("SELECT id, aspect FROM review_questions WHERE is_active = true");
+    const questions = qResult.rows;
+
+    if (questions.length === 0) {
+      return res.status(500).json({ message: "Konfigurasi pertanyaan review tidak ditemukan" });
+    }
+
+    // Map untuk menyimpan skor per aspek
+    const aspectScores = {
+      kebersihan: { sum: 0, count: 0 },
+      fasilitas: { sum: 0, count: 0 },
+      pelayanan: { sum: 0, count: 0 },
+      keamanan: { sum: 0, count: 0 },
+      kepuasan: { sum: 0, count: 0 }
+    };
+
+    // Map jawaban user berdasarkan question_id
     const answerMap = {};
     for (const a of answers) {
-      if (a.score < 1 || a.score > 5) {
-        return res.status(400).json({ message: "Score harus antara 1-5" });
+      if (typeof a.score !== 'number' || a.score < 1 || a.score > 5) {
+        return res.status(400).json({ message: "Score harus berupa angka antara 1-5" });
       }
       answerMap[a.question_id] = a.score;
     }
 
-    // Get all active questions to verify IDs
-    const qRows = (await db.query("SELECT id FROM review_questions ORDER BY id ASC LIMIT 10")).rows;
-    const qIds = qRows.map(r => r.id);
+    // Iterasi pertanyaan dari DB dan cocokkan dengan jawaban user
+    for (const q of questions) {
+      const score = answerMap[q.id];
+      if (score === undefined) {
+        return res.status(400).json({ message: `Pertanyaan "${q.question || q.id}" belum dijawab` });
+      }
 
-    // Verify all required question IDs are present
-    for (const id of qIds) {
-      if (answerMap[id] === undefined) {
-        return res.status(400).json({ message: "Beberapa pertanyaan belum dijawab" });
+      const aspectKey = (q.aspect || "kepuasan").toLowerCase();
+      if (aspectScores[aspectKey]) {
+        aspectScores[aspectKey].sum += score;
+        aspectScores[aspectKey].count += 1;
+      } else {
+        // Fallback jika ada aspek lain yang tidak terdaftar di bobot
+        aspectScores.kepuasan.sum += score;
+        aspectScores.kepuasan.count += 1;
       }
     }
 
-    const getAvg = (idx1, idx2) => (answerMap[qIds[idx1]] + answerMap[qIds[idx2]]) / 2;
+    // Hitung rata-rata per aspek (jika count 0, beri default 0 atau 3)
+    const getAvg = (key) => aspectScores[key].count > 0 ? aspectScores[key].sum / aspectScores[key].count : 0;
 
-    const kebersihan = getAvg(0, 1);
-    const fasilitas = getAvg(2, 3);
-    const pelayanan = getAvg(4, 5);
-    const keamanan = getAvg(6, 7);
-    const kepuasan = getAvg(8, 9);
+    const avgKebersihan = getAvg('kebersihan');
+    const avgFasilitas = getAvg('fasilitas');
+    const avgPelayanan = getAvg('pelayanan');
+    const avgKeamanan = getAvg('keamanan');
+    const avgKepuasan = getAvg('kepuasan');
 
-    // Rumus Bobot: 30%, 25%, 20%, 15%, 10%
+    // Rumus Bobot: Kebersihan 30%, Fasilitas 25%, Pelayanan 20%, Keamanan 15%, Kepuasan 10%
     const totalScore = (
-      (kebersihan / 5 * 30) +
-      (fasilitas / 5 * 25) +
-      (pelayanan / 5 * 20) +
-      (keamanan / 5 * 15) +
-      (kepuasan / 5 * 10)
+      (avgKebersihan / 5 * 30) +
+      (avgFasilitas / 5 * 25) +
+      (avgPelayanan / 5 * 20) +
+      (avgKeamanan / 5 * 15) +
+      (avgKepuasan / 5 * 10)
     );
 
     // 5. Simpan ke Database
@@ -301,7 +325,7 @@ reviewsRouter.post("/", async (req, res) => {
         JSON.stringify(answers), 
         Math.round(totalScore), 
         comment,
-        Math.round((kebersihan + fasilitas + pelayanan + keamanan + kepuasan) / 5) // Avg rating for backward compatibility
+        Math.round((avgKebersihan + avgFasilitas + avgPelayanan + avgKeamanan + avgKepuasan) / 5)
       ]
     );
 
