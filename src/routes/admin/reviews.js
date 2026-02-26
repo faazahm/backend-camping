@@ -264,6 +264,7 @@ adminReviewsRouter.get("/", async (req, res) => {
     const formattedRows = rows.map((row) => ({
       ...row,
       totalScore: row.total_score,
+      createdAt: row.created_at,
       userEmail: row.user_email,
       userName: row.user_name,
       campName: row.camp_name,
