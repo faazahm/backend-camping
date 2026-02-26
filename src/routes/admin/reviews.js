@@ -15,6 +15,115 @@ adminReviewsRouter.use(authenticate, requireAdmin);
 
 /**
  * @swagger
+ * /admin/reviews/conclusion:
+ *   get:
+ *     summary: Mendapatkan kesimpulan ulasan semua user (Admin)
+ *     tags: [AdminReviews]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Kesimpulan mutu dan analisis aspek
+ */
+adminReviewsRouter.get("/conclusion", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ message: "Database is not configured" });
+
+    // Get all reviews
+    const { rows: reviews } = await db.query("SELECT evaluation_answers, total_score FROM reviews");
+    if (reviews.length === 0) {
+      return res.json({
+        total_reviews: 0,
+        average_score: 0,
+        category: "N/A",
+        best_aspect: "N/A",
+        worst_aspect: "N/A"
+      });
+    }
+
+    // Get all active questions to map IDs
+    const qRows = (await db.query("SELECT id FROM review_questions ORDER BY id ASC LIMIT 10")).rows;
+    const qIds = qRows.map(r => r.id);
+
+    let totalScoreSum = 0;
+    const aspectSums = {
+      kebersihan: 0,
+      fasilitas: 0,
+      pelayanan: 0,
+      keamanan: 0,
+      kepuasan: 0
+    };
+
+    reviews.forEach(review => {
+      totalScoreSum += review.total_score;
+      
+      let answers = review.evaluation_answers;
+      if (typeof answers === "string") answers = JSON.parse(answers);
+      
+      const answerMap = {};
+      answers.forEach(a => { answerMap[a.question_id] = a.score; });
+
+      const getAvg = (idx1, idx2) => ( (answerMap[qIds[idx1]] || 0) + (answerMap[qIds[idx2]] || 0) ) / 2;
+
+      aspectSums.kebersihan += getAvg(0, 1);
+      aspectSums.fasilitas += getAvg(2, 3);
+      aspectSums.pelayanan += getAvg(4, 5);
+      aspectSums.keamanan += getAvg(6, 7);
+      aspectSums.kepuasan += getAvg(8, 9);
+    });
+
+    const totalCount = reviews.length;
+    const averageScore = Math.round(totalScoreSum / totalCount);
+    
+    const aspectAvgs = {
+      kebersihan: aspectSums.kebersihan / totalCount,
+      fasilitas: aspectSums.fasilitas / totalCount,
+      pelayanan: aspectSums.pelayanan / totalCount,
+      keamanan: aspectSums.keamanan / totalCount,
+      kepuasan: aspectSums.kepuasan / totalCount
+    };
+
+    // Find best and worst aspect
+    let bestAspect = "";
+    let worstAspect = "";
+    let maxVal = -1;
+    let minVal = 6;
+
+    Object.entries(aspectAvgs).forEach(([aspect, val]) => {
+      if (val > maxVal) {
+        maxVal = val;
+        bestAspect = aspect;
+      }
+      if (val < minVal) {
+        minVal = val;
+        worstAspect = aspect;
+      }
+    });
+
+    // Determine category
+    let category = "";
+    if (averageScore <= 50) category = "Buruk";
+    else if (averageScore <= 70) category = "Cukup";
+    else if (averageScore <= 85) category = "Baik";
+    else category = "Sangat Baik";
+
+    return res.json({
+      total_reviews: totalCount,
+      average_score: averageScore,
+      category,
+      best_aspect: bestAspect,
+      worst_aspect: worstAspect,
+      aspect_averages: aspectAvgs
+    });
+
+  } catch (err) {
+    console.error("Admin Conclusion Error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+/**
+ * @swagger
  * /admin/reviews/summary:
  *   get:
  *     summary: Mendapatkan ringkasan statistik ulasan

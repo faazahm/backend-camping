@@ -248,6 +248,80 @@ if (db) {
         ALTER TABLE "bookings"
         ADD COLUMN IF NOT EXISTS "payment_proof" TEXT;
       `);
+
+      // Create review_questions table
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS "review_questions" (
+          "id" SERIAL PRIMARY KEY,
+          "question" TEXT NOT NULL,
+          "options" JSONB NOT NULL,
+          "created_at" TIMESTAMP DEFAULT NOW()
+        );
+      `);
+
+      // Create reviews table
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS "reviews" (
+          "id" SERIAL PRIMARY KEY,
+          "booking_id" INTEGER REFERENCES "bookings"("id"),
+          "user_id" INTEGER REFERENCES "users"("id"),
+          "evaluation_answers" TEXT,
+          "total_score" INTEGER DEFAULT 0,
+          "comment" TEXT,
+          "created_at" TIMESTAMP DEFAULT NOW()
+        );
+      `);
+
+      await db.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'reviews' AND column_name = 'evaluation_answers'
+          ) THEN
+            ALTER TABLE "reviews" ADD COLUMN "evaluation_answers" TEXT;
+          END IF;
+
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'reviews' AND column_name = 'total_score'
+          ) THEN
+            ALTER TABLE "reviews" ADD COLUMN "total_score" INTEGER DEFAULT 0;
+          END IF;
+
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'reviews' AND column_name = 'comment'
+          ) THEN
+            ALTER TABLE "reviews" ADD COLUMN "comment" TEXT;
+          END IF;
+        END $$;
+      `);
+
+      // Insert default questions (10 questions grouped by 5 aspects)
+      const qCheck = await db.query("SELECT COUNT(*) FROM review_questions");
+      if (parseInt(qCheck.rows[0].count) === 0) {
+        const defaultQuestions = [
+          // Kebersihan (1-2)
+          ['Seberapa bersih area perkemahan secara keseluruhan?', JSON.stringify(['Sangat Bersih', 'Bersih', 'Cukup', 'Kotor', 'Sangat Kotor'])],
+          ['Bagaimana kondisi kebersihan toilet dan fasilitas air?', JSON.stringify(['Sangat Bersih', 'Bersih', 'Cukup', 'Kotor', 'Sangat Kotor'])],
+          // Fasilitas (3-4)
+          ['Apakah peralatan camping yang disewa dalam kondisi baik?', JSON.stringify(['Sangat Baik', 'Baik', 'Cukup', 'Buruk', 'Sangat Buruk'])],
+          ['Seberapa lengkap fasilitas pendukung (listrik, lampu, dll)?', JSON.stringify(['Sangat Lengkap', 'Lengkap', 'Cukup', 'Kurang', 'Sangat Kurang'])],
+          // Pelayanan (5-6)
+          ['Bagaimana keramahan staf dalam melayani Anda?', JSON.stringify(['Sangat Ramah', 'Ramah', 'Cukup', 'Kurang', 'Sangat Kurang'])],
+          ['Seberapa cepat respon staf saat Anda membutuhkan bantuan?', JSON.stringify(['Sangat Cepat', 'Cepat', 'Cukup', 'Lambat', 'Sangat Lambat'])],
+          // Keamanan & Lingkungan (7-8)
+          ['Seberapa aman perasaan Anda selama berkemah di sini?', JSON.stringify(['Sangat Aman', 'Aman', 'Cukup', 'Rawan', 'Sangat Rawan'])],
+          ['Bagaimana ketenangan dan kenyamanan lingkungan sekitar?', JSON.stringify(['Sangat Tenang', 'Tenang', 'Cukup', 'Bising', 'Sangat Bising'])],
+          // Kepuasan Umum (9-10)
+          ['Seberapa besar kemungkinan Anda merekomendasikan tempat ini?', JSON.stringify(['Sangat Mungkin', 'Mungkin', 'Ragu-ragu', 'Tidak Mungkin', 'Sangat Tidak Mungkin'])],
+          ['Apakah harga yang dibayar sebanding dengan pengalaman Anda?', JSON.stringify(['Sangat Sebanding', 'Sebanding', 'Cukup', 'Mahal', 'Sangat Mahal'])]
+        ];
+        for (const [q, opt] of defaultQuestions) {
+          await db.query('INSERT INTO review_questions (question, options) VALUES ($1, $2)', [q, opt]);
+        }
+      }
     } catch (e) {
       console.error("Database bootstrap error:", e);
     }
