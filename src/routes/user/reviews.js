@@ -164,10 +164,7 @@ reviewsRouter.get("/pending", async (req, res) => {
 
     const { rows } = await db.query(query, [userId]);
 
-    return res.json({
-      pendingReviews: rows,
-      questions: questionsQuery.rows,
-    });
+    return res.json(rows);
   } catch (err) {
     console.error("Get Pending Reviews Error:", err);
     return res.status(500).json({ message: "Internal server error" });
