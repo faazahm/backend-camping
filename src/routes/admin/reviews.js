@@ -30,7 +30,7 @@ adminReviewsRouter.get("/conclusion", async (req, res) => {
     if (!db) return res.status(500).json({ message: "Database is not configured" });
 
     // Get all reviews
-    const { rows: reviews } = await db.query("SELECT evaluation_answers, total_score FROM reviews");
+    const { rows: reviews } = await db.query("SELECT evaluation_answers, COALESCE(total_score, 0) as total_score FROM reviews");
     if (reviews.length === 0) {
       return res.json({
         total_reviews: 0,
@@ -240,10 +240,13 @@ adminReviewsRouter.get("/", async (req, res) => {
       SELECT 
         r.id,
         r.rating,
+        COALESCE(r.total_score, 0) as total_score,
+        COALESCE(r.comment, '-') as comment,
         r.evaluation_answers,
         r.created_at,
         u.full_name as user_name,
         u.email as user_email,
+        u.email as email,
         c.name as camp_name,
         b.public_id as booking_id,
         b.start_date,
@@ -257,9 +260,14 @@ adminReviewsRouter.get("/", async (req, res) => {
 
     const { rows } = await db.query(query);
 
-    // Parse evaluation_answers if it is a string
+    // Parse evaluation_answers if it is a string and provide camelCase aliases for frontend
     const formattedRows = rows.map((row) => ({
       ...row,
+      totalScore: row.total_score,
+      userEmail: row.user_email,
+      userName: row.user_name,
+      campName: row.camp_name,
+      bookingId: row.booking_id,
       evaluation_answers: typeof row.evaluation_answers === "string" 
         ? JSON.parse(row.evaluation_answers) 
         : row.evaluation_answers,
