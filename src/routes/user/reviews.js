@@ -63,8 +63,8 @@ reviewsRouter.get("/history", async (req, res) => {
     const query = `
       SELECT 
         r.id,
+        r.rating,
         r.total_score,
-        r.comment,
         r.created_at,
         c.name as camp_name
       FROM reviews r
@@ -101,7 +101,7 @@ reviewsRouter.get("/summary", async (req, res) => {
     const query = `
       SELECT 
         COUNT(*) as total_reviews,
-        AVG(rating) as average_rating
+        AVG(total_score) as average_rating
       FROM reviews
     `;
 
@@ -214,15 +214,11 @@ reviewsRouter.post("/", async (req, res) => {
     }
 
     const userId = req.user.id;
-    const { booking_id: bookingPublicId, answers, comment } = req.body;
+    const { booking_id: bookingPublicId, answers } = req.body;
 
     // 1. Validasi Input Dasar
     if (!bookingPublicId || !answers || !Array.isArray(answers) || answers.length !== 10) {
       return res.status(400).json({ message: "Semua 10 pertanyaan wajib diisi" });
-    }
-
-    if (!comment || comment.length < 10) {
-      return res.status(400).json({ message: "Komentar minimal 10 karakter" });
     }
 
     // 2. Validasi Booking (Milik user, status CHECK_OUT)
@@ -311,18 +307,19 @@ reviewsRouter.post("/", async (req, res) => {
       (avgKepuasan / 5 * 10)
     );
 
+    const calculatedRating = Math.round((avgKebersihan + avgFasilitas + avgPelayanan + avgKeamanan + avgKepuasan) / 5);
+
     // 5. Simpan ke Database
     await db.query(
-      `INSERT INTO reviews (booking_id, user_id, camp_id, evaluation_answers, total_score, comment, rating)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO reviews (booking_id, user_id, camp_id, evaluation_answers, total_score, rating)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         internalBookingId, 
         userId, 
         campId, 
         JSON.stringify(answers), 
-        Math.round(totalScore), 
-        comment,
-        Math.round((avgKebersihan + avgFasilitas + avgPelayanan + avgKeamanan + avgKepuasan) / 5)
+        Math.round(totalScore),
+        calculatedRating
       ]
     );
 

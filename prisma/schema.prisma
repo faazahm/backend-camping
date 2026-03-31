@@ -63,20 +63,24 @@ model Booking {
   user User @relation(fields: [userId], references: [id])
   camp Camp @relation(fields: [campId], references: [id])
   bookingEquipments BookingEquipment[]
+  review            Review?
 
   @@map("bookings")
 }
 
 model Review {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  campId    Int      @map("camp_id")
-  rating    Int
-  comment   String?
-  createdAt DateTime @default(now()) @map("created_at")
+  id                Int      @id @default(autoincrement())
+  bookingId         Int      @unique @map("booking_id")
+  userId            Int      @map("user_id")
+  campId            Int      @map("camp_id")
+  rating            Int
+  totalScore        Int      @map("total_score")
+  evaluationAnswers Json     @map("evaluation_answers")
+  createdAt         DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id])
-  camp Camp @relation(fields: [campId], references: [id])
+  booking Booking @relation(fields: [bookingId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  camp    Camp    @relation(fields: [campId], references: [id])
 
   @@map("reviews")
 }

@@ -142,7 +142,7 @@ adminReviewsRouter.get("/summary", async (req, res) => {
     }
 
     // 1. Get raw reviews data for aggregation
-    const reviewsQuery = `SELECT rating, evaluation_answers FROM reviews`;
+    const reviewsQuery = `SELECT total_score, rating, evaluation_answers FROM reviews`;
     const { rows: reviews } = await db.query(reviewsQuery);
 
     // 2. Get questions map for labeling
@@ -157,13 +157,13 @@ adminReviewsRouter.get("/summary", async (req, res) => {
 
     // 3. Process Data
     const totalReviews = reviews.length;
-    let totalRating = 0;
+    let totalScoreSum = 0;
     const ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     const evaluationStats = {}; // { questionId: { questionText, answers: { "OptionA": count } } }
 
     reviews.forEach(review => {
-      // Rating Stats
-      totalRating += review.rating;
+      // Score & Rating Stats
+      totalScoreSum += review.total_score;
       if (ratingDistribution[review.rating] !== undefined) {
         ratingDistribution[review.rating]++;
       }
@@ -178,15 +178,9 @@ adminReviewsRouter.get("/summary", async (req, res) => {
         }
       }
 
-      // Iterate answers (Assuming answers is object { "1": "Answer A", "2": "Answer B" } or Array)
-      // Frontend likely sends object map or array. Let's handle both or assume standard.
-      // Based on typical form handlers, let's assume it matches the structure sent by FE.
-      // If it's an array: [{ questionId: 1, answer: "A" }]
-      // If it's an object: { "1": "A" }
-      
-      // Let's normalize iteration
+      // Normalize iteration
       const answerEntries = Array.isArray(answers) 
-        ? answers.map(a => [a.questionId, a.answer]) 
+        ? answers.map(a => [a.questionId || a.question_id, a.answer || a.score]) 
         : Object.entries(answers || {});
 
       answerEntries.forEach(([qId, ansVal]) => {
@@ -202,7 +196,7 @@ adminReviewsRouter.get("/summary", async (req, res) => {
       });
     });
 
-    const averageRating = totalReviews > 0 ? (totalRating / totalReviews).toFixed(1) : 0;
+    const averageRating = totalReviews > 0 ? (totalScoreSum / totalReviews).toFixed(1) : 0;
 
     return res.json({
       totalReviews,
@@ -241,7 +235,6 @@ adminReviewsRouter.get("/", async (req, res) => {
         r.id,
         r.rating,
         COALESCE(r.total_score, 0) as total_score,
-        COALESCE(r.comment, '-') as comment,
         r.evaluation_answers,
         r.created_at,
         u.full_name as user_name,
