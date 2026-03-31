@@ -122,6 +122,14 @@ if (db) {
            END IF;
          END $$;`
       );
+      await db.query(
+        `DO $$
+         BEGIN
+           IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'BookingStatus' OR typname = 'bookingstatus') THEN
+             CREATE TYPE "BookingStatus" AS ENUM ('PENDING', 'CANCELLED');
+           END IF;
+         END $$;`
+      );
       await db.query(`ALTER TYPE "BookingStatus" ADD VALUE IF NOT EXISTS 'PAID'`);
       await db.query(`ALTER TYPE "BookingStatus" ADD VALUE IF NOT EXISTS 'CHECK_IN'`);
       await db.query(`ALTER TYPE "BookingStatus" ADD VALUE IF NOT EXISTS 'CHECK_OUT'`);
