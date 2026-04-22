@@ -75,7 +75,18 @@ adminBookingsRouter.get("/", async (req, res) => {
         u.username,
         u.email,
         u.full_name,
-        c.name as camp_name
+        c.name as camp_name,
+        (
+          SELECT json_agg(json_build_object(
+            'name', e.name,
+            'quantity', be.quantity,
+            'price', be.price,
+            'nights', be.nights
+          ))
+          FROM booking_equipments be
+          JOIN equipments e ON e.id = be.equipment_id
+          WHERE be.booking_id = b.id
+        ) as equipments
       FROM "bookings" b
       LEFT JOIN "users" u ON b.user_id = u.id
       LEFT JOIN "camps" c ON b.camp_id = c.id
