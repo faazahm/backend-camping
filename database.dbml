@@ -1,0 +1,177 @@
+// ============================================================
+// DBML — Sistem Backend Camping
+// Database: PostgreSQL
+// Generated from: Prisma schema + migration SQL + raw SQL (db.js)
+// ============================================================
+
+Project backend_camping {
+  database_type: 'PostgreSQL'
+  Note: '''
+    Sistem pemesanan camping (Potrobayan Camping Ground).
+    Mencakup manajemen user, camp, booking, sewa peralatan,
+    ulasan berbobot, notifikasi admin, dan blacklist JWT.
+  '''
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+Enum BookingStatus {
+  PENDING   [note: 'Baru dibuat, menunggu upload bukti bayar']
+  PAID      [note: 'Bukti bayar sudah diverifikasi admin']
+  CHECK_IN  [note: 'Tamu sudah check-in di lokasi']
+  CHECK_OUT [note: 'Tamu sudah check-out, siap direview']
+  CANCELLED [note: 'Booking dibatalkan']
+}
+
+Enum UserRole {
+  USER  [note: 'Pengguna biasa']
+  ADMIN [note: 'Administrator sistem']
+}
+
+// ============================================================
+// TABLES
+// ============================================================
+
+Table users {
+  id                    serial        [pk, increment, note: 'Primary key internal']
+  public_id             uuid          [unique, not null, default: `gen_random_uuid()`, note: 'ID publik yang dibagikan ke client']
+  email                 text          [unique, not null, note: 'Email login unik']
+  username              text          [unique, not null, note: 'Username unik']
+  password_hash         text          [not null, note: 'Bcrypt hash password']
+  is_verified           boolean       [not null, default: false, note: 'Status verifikasi email']
+  verification_code     text          [note: 'Kode OTP untuk verifikasi email']
+  reset_password_token  text          [note: 'Token untuk reset password']
+  reset_password_expires timestamp    [note: 'Waktu kadaluarsa token reset password']
+  google_id             text          [unique, note: 'ID dari Google OAuth']
+  full_name             varchar(255)  [note: 'Nama lengkap pengguna']
+  phone_number          varchar(20)   [note: 'Nomor telepon']
+  address               text          [note: 'Alamat lengkap']
+  profile_picture       text          [note: 'URL foto profil']
+  role                  UserRole      [not null, default: 'USER', note: 'Peran pengguna dalam sistem']
+  created_at            timestamp     [not null, default: `CURRENT_TIMESTAMP`]
+
+  Note: 'Tabel pengguna sistem. Mendukung login email/password dan Google OAuth.'
+}
+
+Table camps {
+  id             serial     [pk, increment, note: 'Primary key internal']
+  public_id      uuid       [unique, not null, default: `gen_random_uuid()`, note: 'ID publik camp']
+  name           text       [not null, note: 'Nama lokasi camping']
+  description    text       [note: 'Deskripsi detail camp']
+  location       text       [note: 'Lokasi/alamat camp']
+  nightly_price  integer    [not null, note: 'Harga per malam dalam Rupiah']
+  daily_capacity integer    [not null, note: 'Kapasitas maksimal orang per hari']
+  is_active      boolean    [not null, default: true, note: 'Soft-delete: false = camp tidak tampil di listing']
+  photo_url      text       [note: 'URL foto utama camp']
+  created_at     timestamp  [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at     timestamp  [not null, note: 'Diperbarui setiap ada perubahan data']
+
+  Note: 'Lokasi camping yang dapat dipesan. Kapasitas dicek per hari untuk mencegah overbooking.'
+}
+
+Table bookings {
+  id            serial         [pk, increment, note: 'Primary key internal']
+  public_id     uuid           [unique, not null, default: `gen_random_uuid()`, note: 'ID publik yang diberikan ke user/client']
+  user_id       integer        [not null, ref: > users.id, note: 'Pemilik booking']
+  camp_id       integer        [not null, ref: > camps.id, note: 'Camp yang dipesan']
+  start_date    timestamp      [not null, note: 'Tanggal mulai menginap']
+  end_date      timestamp      [not null, note: 'Tanggal selesai menginap']
+  people_count  integer        [not null, note: 'Jumlah orang yang menginap']
+  total_price   integer        [not null, note: 'Total harga: camp + sewa peralatan (Rupiah)']
+  status        BookingStatus  [not null, default: 'PENDING', note: 'Status alur booking']
+  payment_proof text           [note: 'URL bukti pembayaran di Supabase Storage']
+  created_at    timestamp      [not null, default: `CURRENT_TIMESTAMP`]
+
+  Note: '''
+    Tabel inti pemesanan. Alur status: PENDING → PAID → CHECK_IN → CHECK_OUT → (review bisa disubmit).
+    Kapasitas camp dicek dengan locking per hari untuk mencegah race condition.
+    payment_proof diisi saat user upload bukti bayar, admin kemudian mengubah status ke PAID.
+  '''
+}
+
+Table equipments {
+  id          serial     [pk, increment, note: 'Primary key internal']
+  public_id   uuid       [unique, not null, default: `gen_random_uuid()`, note: 'ID publik peralatan']
+  name        text       [not null, note: 'Nama peralatan camping']
+  description text       [note: 'Deskripsi peralatan']
+  price       integer    [not null, note: 'Harga sewa per malam per unit (Rupiah)']
+  stock       integer    [not null, note: 'Total unit peralatan yang dimiliki']
+  photo_url   text       [note: 'URL foto peralatan']
+  created_at  timestamp  [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at  timestamp  [not null, note: 'Diperbarui setiap ada perubahan data']
+
+  Note: 'Peralatan camping yang bisa disewa. Ketersediaan stok dicek per hari selama rentang booking.'
+}
+
+Table booking_equipments {
+  id           serial   [pk, increment]
+  booking_id   integer  [not null, ref: > bookings.id, note: 'Booking terkait']
+  equipment_id integer  [not null, ref: > equipments.id, note: 'Peralatan yang disewa']
+  quantity     integer  [not null, note: 'Jumlah unit yang disewa']
+  nights       integer  [not null, default: 1, note: 'Durasi sewa dalam malam (≤ durasi booking)']
+  price        integer  [not null, note: 'Total harga: equipment.price × quantity × nights']
+
+  Note: '''
+    Tabel pivot antara bookings dan equipments.
+    Satu booking bisa menyewa beberapa jenis peralatan dengan jumlah dan durasi berbeda.
+  '''
+}
+
+Table reviews {
+  id                 serial     [pk, increment]
+  booking_id         integer    [unique, not null, ref: - bookings.id, note: 'Satu booking hanya bisa punya satu review']
+  user_id            integer    [not null, ref: > users.id, note: 'Pengguna yang menulis review']
+  camp_id            integer    [not null, ref: > camps.id, note: 'Camp yang diulas (denormalisasi untuk query efisien)']
+  rating             integer    [not null, note: 'Rating 1–5, dihitung otomatis dari rata-rata 5 aspek']
+  total_score        integer    [not null, default: 0, note: 'Skor 0–100 berbobot: Kebersihan 30%, Fasilitas 25%, Pelayanan 20%, Keamanan 15%, Kepuasan 10%']
+  evaluation_answers text       [not null, note: 'JSON array: [{question_id, score}] — 10 jawaban per review']
+  comment            text       [note: 'Komentar teks bebas (opsional)']
+  created_at         timestamp  [default: `NOW()`]
+
+  Note: '''
+    Ulasan hanya bisa disubmit setelah status booking = CHECK_OUT.
+    evaluation_answers berisi JSON array jawaban dari 10 pertanyaan aktif.
+    total_score dihitung dengan bobot per aspek evaluasi.
+  '''
+}
+
+Table review_questions {
+  id         serial     [pk, increment]
+  question   text       [not null, note: 'Teks pertanyaan yang ditampilkan ke user']
+  options    jsonb      [not null, note: 'Array pilihan jawaban, misal: ["Sangat Baik","Baik","Cukup","Buruk","Sangat Buruk"]']
+  aspect     text       [note: 'Aspek evaluasi: kebersihan | fasilitas | pelayanan | keamanan | kepuasan']
+  is_active  boolean    [default: true, note: 'Hanya pertanyaan aktif yang digunakan saat submit review']
+  created_at timestamp  [default: `NOW()`]
+
+  Note: '''
+    Bank soal untuk evaluasi. Sistem selalu mengambil 10 pertanyaan aktif (is_active = true).
+    Kolom aspect digunakan untuk mengelompokkan jawaban ke dalam 5 kategori berbobot.
+    Admin dapat menambah/menonaktifkan pertanyaan tanpa menghapus data historis.
+  '''
+}
+
+
+
+Table token_blacklist {
+  id         serial     [pk, increment]
+  token      text       [unique, not null, note: 'JWT token yang sudah di-logout/dicabut']
+  expires_at timestamp  [not null, note: 'Waktu kadaluarsa token — untuk cleanup berkala']
+  created_at timestamp  [default: `NOW()`]
+
+  Note: 'Daftar hitam JWT. Token yang ada di sini ditolak meski secara kriptografi masih valid. Digunakan untuk proses logout.'
+}
+
+// ============================================================
+// REFERENSI RELASI (Ringkasan)
+// ============================================================
+// users         ||--o{ bookings           : "membuat"
+// camps         ||--o{ bookings           : "dipesan dalam"
+// bookings      ||--o{ booking_equipments : "menyertakan"
+// equipments    ||--o{ booking_equipments : "disewa pada"
+// bookings      ||--o| reviews            : "menghasilkan (unique)"
+// users         ||--o{ reviews            : "menulis"
+// camps         ||--o{ reviews            : "menerima"
+// (notifications dihapus — tidak digunakan)
+// ============================================================

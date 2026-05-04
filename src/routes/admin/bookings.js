@@ -2,7 +2,6 @@ const express = require("express");
 const { db } = require("../../config/db");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
 const { getIO } = require("../../realtime/io");
-const notificationService = require("../../services/notification");
 
 const adminBookingsRouter = express.Router();
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -193,14 +192,6 @@ adminBookingsRouter.put("/:id/status", async (req, res) => {
 
     const booking = result.rows[0];
 
-    // Notification if status becomes PAID
-    if (status === 'PAID' && previousStatus !== 'PAID') {
-      await notificationService.createNotification(client, {
-        message: `Booking #${booking.public_id.substring(0, 8)} telah dibayar (Status: PAID)`,
-        type: 'BOOKING_PAID',
-        relatedId: bookingId
-      });
-    }
 
     await client.query("COMMIT");
 

@@ -6,7 +6,6 @@ const { bookingRouter } = require("./routes/user/booking");
 const { adminRouter } = require("./routes/admin/index");
 const { dashboardRouter } = require("./routes/user/dashboard");
 const { adminDashboardRouter } = require("./routes/admin/dashboard");
-const { notificationRouter } = require("./routes/admin/notifications");
 const { reportsRouter } = require("./routes/admin/reports");
 const { profileRouter } = require("./routes/user/profile");
 const { reviewsRouter } = require("./routes/user/reviews");
@@ -47,7 +46,6 @@ function createApp() {
     router.use("/booking", bookingRouter);
     router.use("/dashboard", dashboardRouter);
     router.use("/admin/dashboard", adminDashboardRouter);
-    router.use("/admin/notifications", notificationRouter);
     router.use("/admin/reports", reportsRouter);
     router.use("/admin/reviews", adminReviewsRouter);
     router.use("/admin/questions", adminQuestionsRouter);

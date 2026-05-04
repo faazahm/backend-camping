@@ -134,17 +134,6 @@ if (db) {
       await db.query(`ALTER TYPE "BookingStatus" ADD VALUE IF NOT EXISTS 'CHECK_IN'`);
       await db.query(`ALTER TYPE "BookingStatus" ADD VALUE IF NOT EXISTS 'CHECK_OUT'`);
 
-      // Create notifications table
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS "notifications" (
-          "id" SERIAL PRIMARY KEY,
-          "message" TEXT NOT NULL,
-          "is_read" BOOLEAN DEFAULT false,
-          "type" TEXT,
-          "related_id" INTEGER,
-          "created_at" TIMESTAMP DEFAULT NOW()
-        );
-      `);
 
       await db.query(
         `DO $$
