@@ -235,6 +235,7 @@ adminReviewsRouter.get("/", async (req, res) => {
         r.id,
         r.rating,
         COALESCE(r.total_score, 0) as total_score,
+        r.comment,
         r.evaluation_answers,
         r.created_at,
         u.full_name as user_name,

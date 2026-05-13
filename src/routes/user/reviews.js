@@ -65,6 +65,7 @@ reviewsRouter.get("/history", async (req, res) => {
         r.id,
         r.rating,
         r.total_score,
+        r.comment,
         r.created_at,
         c.name as camp_name
       FROM reviews r
@@ -214,7 +215,7 @@ reviewsRouter.post("/", async (req, res) => {
     }
 
     const userId = req.user.id;
-    const { booking_id: bookingPublicId, answers } = req.body;
+    const { booking_id: bookingPublicId, answers, comment } = req.body;
 
     // 1. Validasi Input Dasar
     if (!bookingPublicId || !answers || !Array.isArray(answers) || answers.length !== 10) {
@@ -311,15 +312,16 @@ reviewsRouter.post("/", async (req, res) => {
 
     // 5. Simpan ke Database
     await db.query(
-      `INSERT INTO reviews (booking_id, user_id, camp_id, evaluation_answers, total_score, rating)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO reviews (booking_id, user_id, camp_id, evaluation_answers, total_score, rating, comment)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         internalBookingId, 
         userId, 
         campId, 
         JSON.stringify(answers), 
         Math.round(totalScore),
-        calculatedRating
+        calculatedRating,
+        comment || null
       ]
     );
 

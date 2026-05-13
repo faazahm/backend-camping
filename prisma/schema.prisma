@@ -76,6 +76,7 @@ model Review {
   rating            Int
   totalScore        Int      @map("total_score")
   evaluationAnswers Json     @map("evaluation_answers")
+  comment           String?  // Komentar opsional dari user
   createdAt         DateTime @default(now()) @map("created_at")
 
   booking Booking @relation(fields: [bookingId], references: [id])
