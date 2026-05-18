@@ -1,37 +1,27 @@
-const nodemailer = require("nodemailer");
-
-let gmailTransporter = null;
-if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-  gmailTransporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    // Pengaturan penting untuk Railway agar koneksi tidak cepat putus
-    connectionTimeout: 10000, 
-    tls: { rejectUnauthorized: false },
-  });
-  console.log("[Email] Gmail SMTP transporter initialized.");
-}
+const axios = require("axios");
 
 const sendEmail = async (options) => {
   const { to, subject, text, html } = options;
 
-  if (gmailTransporter) {
-    console.log("[Email] Attempting via Gmail SMTP...");
+  if (process.env.BREVO_API_KEY) {
+    console.log("[Email] Attempting via Brevo API...");
     try {
-      const info = await gmailTransporter.sendMail({
-        from: `"Camping App" <${process.env.EMAIL_USER}>`,
-        to,
-        subject,
-        text,
-        html,
-      });
-      console.log("[Email] SUCCESS via Gmail SMTP:", info.messageId);
-      return { success: true, id: info.messageId };
+      const senderEmail = process.env.EMAIL_USER || "noreply@camping.com";
+      const response = await axios.post(
+        "https://api.brevo.com/v3/smtp/email",
+        {
+          sender: { email: senderEmail, name: "Camping App" },
+          to: [{ email: to }],
+          subject,
+          textContent: text,
+          htmlContent: html || text,
+        },
+        { headers: { "api-key": process.env.BREVO_API_KEY.trim() } }
+      );
+      console.log("[Email] SUCCESS via Brevo API:", response.data.messageId);
+      return { success: true, id: response.data.messageId };
     } catch (err) {
-      console.error("[Email] Gmail SMTP ERROR:", err.message);
+      console.error("[Email] Brevo API ERROR:", err.response?.data || err.message);
       throw err;
     }
   }
@@ -40,7 +30,7 @@ const sendEmail = async (options) => {
   return { success: false, message: "No email service configured" };
 };
 
-const isEmailConfigured = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+const isEmailConfigured = Boolean(process.env.BREVO_API_KEY);
 
 module.exports = { sendEmail, isEmailConfigured };
 
