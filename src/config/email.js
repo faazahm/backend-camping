@@ -1,12 +1,12 @@
 const nodemailer = require("nodemailer");
 
 let gmailTransporter = null;
-if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
   gmailTransporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
     },
     // Pengaturan penting untuk Railway agar koneksi tidak cepat putus
     connectionTimeout: 10000, 
@@ -22,7 +22,7 @@ const sendEmail = async (options) => {
     console.log("[Email] Attempting via Gmail SMTP...");
     try {
       const info = await gmailTransporter.sendMail({
-        from: `"Camping App" <${process.env.GMAIL_USER}>`,
+        from: `"Camping App" <${process.env.EMAIL_USER}>`,
         to,
         subject,
         text,
@@ -40,7 +40,7 @@ const sendEmail = async (options) => {
   return { success: false, message: "No email service configured" };
 };
 
-const isEmailConfigured = Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
+const isEmailConfigured = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 
 module.exports = { sendEmail, isEmailConfigured };
 
