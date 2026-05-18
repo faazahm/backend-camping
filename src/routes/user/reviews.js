@@ -11,6 +11,36 @@ const reviewsRouter = express.Router();
  *   description: Manajemen ulasan pengguna
  */
 
+// ENDPOINT PUBLIC: Melihat semua reviews (tanpa login)
+reviewsRouter.get("/public", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ message: "Database error" });
+
+    const query = `
+      SELECT 
+        r.id,
+        r.rating,
+        r.total_score,
+        r.comment,
+        r.created_at,
+        u.username,
+        u.full_name,
+        c.name as camp_name
+      FROM reviews r
+      JOIN bookings b ON r.booking_id = b.id
+      JOIN users u ON r.user_id = u.id
+      JOIN camps c ON b.camp_id = c.id
+      ORDER BY r.created_at DESC
+    `;
+
+    const { rows } = await db.query(query);
+    return res.json(rows);
+  } catch (err) {
+    console.error("Get Public Reviews Error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 reviewsRouter.use(authenticate);
 
 /**
