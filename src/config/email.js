@@ -84,30 +84,7 @@ const sendEmail = async (options) => {
     }
   }
 
-  // 3. Try Brevo API (requires IP whitelist — may fail on Railway)
-  if (process.env.BREVO_API_KEY) {
-    console.log("[Email] Attempting via Brevo API...");
-    try {
-      const senderEmail = process.env.GMAIL_USER || process.env.EMAIL_USER;
-      const response = await axios.post(
-        "https://api.brevo.com/v3/smtp/email",
-        {
-          sender: { email: senderEmail, name: "Camping App" },
-          to: [{ email: to }],
-          subject,
-          textContent: text,
-          htmlContent: html || text,
-        },
-        { headers: { "api-key": process.env.BREVO_API_KEY.trim() } }
-      );
-      console.log("[Email] SUCCESS via Brevo API:", response.data.messageId);
-      return { success: true, id: response.data.messageId };
-    } catch (err) {
-      console.error("[Email] Brevo API ERROR:", err.response?.data || err.message);
-    }
-  }
-
-  // 4. Try legacy SMTP as last resort
+  // 3. Try legacy SMTP as last resort
   if (mailTransporter) {
     console.log(`[Email] Attempting via legacy SMTP (${process.env.EMAIL_HOST || "smtp.gmail.com"})...`);
     try {
@@ -131,5 +108,9 @@ const sendEmail = async (options) => {
   return { success: false, message: "No email service configured" };
 };
 
-module.exports = { mailTransporter, sendEmail };
+const isEmailConfigured = Boolean(
+  gmailTransporter || process.env.RESEND_API_KEY || mailTransporter
+);
+
+module.exports = { mailTransporter, sendEmail, isEmailConfigured };
 

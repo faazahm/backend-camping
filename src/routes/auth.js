@@ -2,7 +2,7 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const rateLimit = require("express-rate-limit");
 const { db } = require("../config/db");
-const { mailTransporter, sendEmail } = require("../config/email");
+const { mailTransporter, sendEmail, isEmailConfigured } = require("../config/email");
 const { googleClient } = require("../config/google");
 const { generateVerificationCode, generateToken, generateResetToken } = require("../utils/auth");
 const { authenticate } = require("../middleware/auth");
@@ -102,7 +102,7 @@ authRouter.post("/register", async (req, res) => {
       [email, username, passwordHash, false, verificationCode]
     );
 
-    if (mailTransporter) {
+    if (isEmailConfigured) {
       const mailOptions = {
         from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
         to: email,
@@ -520,7 +520,7 @@ authRouter.post("/forgot-password", async (req, res) => {
     if (!db) {
       return res.status(500).json({ message: "Database is not configured" });
     }
-    if (!mailTransporter) {
+    if (!isEmailConfigured) {
       return res.status(500).json({ message: "Email is not configured" });
     }
 
