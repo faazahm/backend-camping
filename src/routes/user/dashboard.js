@@ -53,6 +53,7 @@ dashboardRouter.get("/history", authenticate, async (req, res) => {
         b.total_price,
         b.status,
         b.created_at,
+        b.payment_proof,
         c.name as camp_name,
         c.public_id as camp_public_id,
         (
