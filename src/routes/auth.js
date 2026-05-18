@@ -61,12 +61,6 @@ authRouter.post("/register", async (req, res) => {
         .json({ message: "Database is not configured on the server" });
     }
 
-    // if (!mailTransporter) {
-    //   return res
-    //     .status(500)
-    //     .json({ message: "Email is not configured on the server" });
-    // }
-
     const { email, username, password } = req.body;
 
     if (!email || !username || !password) {
@@ -74,23 +68,21 @@ authRouter.post("/register", async (req, res) => {
         .status(400)
         .json({ message: "Email, username, and password are required" });
     }
-
-    // const { rows: existing } = await db.query(
-    //   "SELECT id FROM users WHERE email = $1 OR username = $2",
-    //   [email, username]
-    // );
-
-    // if (existing.length > 0) {
-    //   return res.status(400).json({ message: "Email or username already used" });
-    // }
     
-    // Check email separately to give clear error message
+    // Check email: jika sudah ada DAN SUDAH VERIFIED, error
     const { rows: existingEmail } = await db.query(
-      "SELECT id FROM users WHERE email = $1",
+      "SELECT id, is_verified FROM users WHERE email = $1",
       [email]
     );
+    
     if (existingEmail.length > 0) {
-      return res.status(400).json({ message: "Email sudah terdaftar. Silakan login atau gunakan email lain." });
+      if (existingEmail[0].is_verified) {
+        // Email sudah verified, tidak bisa daftar lagi
+        return res.status(400).json({ message: "Email sudah terdaftar. Silakan login atau gunakan email lain." });
+      } else {
+        // Email belum verified: HAPUS user lama terlebih dahulu
+        await db.query("DELETE FROM users WHERE id = $1", [existingEmail[0].id]);
+      }
     }
 
     // Check username separately to give clear error message
