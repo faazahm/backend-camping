@@ -27,7 +27,8 @@ function createApp() {
   // Konfigurasi Helmet agar tidak memblokir resource cross-origin (gambar)
   app.use(helmet({
     crossOriginResourcePolicy: false,
-    crossOriginEmbedderPolicy: false
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false  // Fix: allows Google OAuth popup window.postMessage
   }));
   
   // Serve folder uploads secara statis agar foto bisa diakses
