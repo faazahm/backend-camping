@@ -263,6 +263,7 @@ adminReviewsRouter.get("/", async (req, res) => {
       userName: row.user_name,
       campName: row.camp_name,
       bookingId: row.booking_id,
+      comment: row.comment ?? null,   // Eksplisit agar selalu ada di response
       evaluation_answers: typeof row.evaluation_answers === "string" 
         ? JSON.parse(row.evaluation_answers) 
         : row.evaluation_answers,
