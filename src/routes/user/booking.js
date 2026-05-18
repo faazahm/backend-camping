@@ -8,6 +8,83 @@ const { getIO } = require("../../realtime/io");
 
 const bookingRouter = express.Router();
 
+// ENDPOINT PUBLIC: Cek availability dengan URL simple (sesuai frontend)
+bookingRouter.get("/availability", async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ message: "Database is not configured on the server" });
+    }
+
+    const { campId, startDate, endDate } = req.query;
+
+    if (!campId || !startDate || !endDate) {
+      return res.status(400).json({ message: "campId, startDate, dan endDate wajib diisi" });
+    }
+
+    if (!UUID_REGEX.test(campId)) {
+      return res.status(400).json({ message: "campId harus berupa UUID yang valid" });
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return res.status(400).json({ message: "Format tanggal tidak valid" });
+    }
+
+    if (end <= start) {
+      return res.status(400).json({ message: "endDate harus lebih besar dari startDate" });
+    }
+
+    const campResult = await db.query(
+      'SELECT id, public_id, daily_capacity FROM "camps" WHERE public_id = $1 AND is_active = true',
+      [campId]
+    );
+
+    if (campResult.rows.length === 0) {
+      return res.status(404).json({ message: "Camp tidak ditemukan" });
+    }
+
+    const campRow = campResult.rows[0];
+    const campIdInternal = campRow.id;
+    const capacity = campRow.daily_capacity;
+
+    const query = `
+      WITH days AS (
+        SELECT generate_series($2::date, ($3::date - INTERVAL '1 day'), INTERVAL '1 day')::date AS day
+      )
+      SELECT
+        d.day,
+        COALESCE(SUM(b.people_count), 0) AS used
+      FROM days d
+      LEFT JOIN "bookings" b
+        ON b.camp_id = $1
+       AND b.status IN ('PAID', 'CHECK_IN')
+       AND d.day >= b.start_date::date
+       AND d.day < b.end_date::date
+      GROUP BY d.day
+      ORDER BY d.day;
+    `;
+
+    const { rows } = await db.query(query, [campIdInternal, startDate, endDate]);
+
+    const availability = rows.map((row) => ({
+      date: row.day,
+      used: Number(row.used),
+      remaining: capacity - Number(row.used),
+    }));
+
+    return res.json({
+      campId: campId,
+      capacity,
+      availability,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 // Multer memory storage for payment proof
 const storage = multer.memoryStorage();
 const upload = multer({
